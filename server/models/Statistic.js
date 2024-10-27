@@ -1,6 +1,5 @@
 // server/models/Statistic.js
-const mysql = require('mysql2');
-const db = require('../db'); // Importa a configuração do banco de dados
+const db = require('../config/db'); // Importa a configuração do banco de dados
 
 class Statistic {
     constructor(signal_id) {

@@ -1,5 +1,5 @@
 /// server/models/Signal.js
-const db = require('../config/db'); // Importando a conexão do banco de dados
+const db = require('../config/db'); // Importa a configuração do banco de dados
 
 class Signal {
     constructor(asset, entry_time, direction) {

@@ -1,5 +1,8 @@
 // Exemplo no accuracyController.js
 const Statistic = require('../models/Statistic');
+const express = require('express');
+const router = express.Router();
+
 
 const getAccuracy = (req, res) => {
     const { signal_id } = req.params; // Supondo que você passe o signal_id como parâmetro
@@ -10,3 +13,8 @@ const getAccuracy = (req, res) => {
         res.json(accuracy);
     });
 };
+module.exports = {
+    getAccuracy,
+    // outras funções
+};
+router.get('/', getAccuracy);

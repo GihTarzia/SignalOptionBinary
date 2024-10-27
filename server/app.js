@@ -3,7 +3,6 @@ require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
-const db = require('./config/db'); // Importando a conexão do banco de dados
 const routes = require('./routes'); // Adicione esta linha para importar as rotas
 
 const app = express();

@@ -2,7 +2,7 @@ const axios = require('axios');
 
 // Configurações da API da Deriv
 const DERIV_API_URL = 'https://api.deriv.com'; // URL base da API
-const DERIV_API_TOKEN = process.env.DERIV_API_TOKEN;
+const DERIV_API_TOKEN = process.env.DERIV_TOKEN;
 
 // Função para fazer uma chamada à API da Deriv
 const callDerivAPI = async (endpoint, method = 'GET', data = {}) => {
@@ -13,7 +13,7 @@ const callDerivAPI = async (endpoint, method = 'GET', data = {}) => {
             data: data,
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${process.env.DERIV_API_TOKEN}` // Adicionando o token aqui
+                'Authorization': `Bearer ${process.env.DERIV_TOKEN}` // Adicionando o token aqui
             }
         });
         return response.data;

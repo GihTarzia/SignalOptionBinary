@@ -1,5 +1,8 @@
 // server/controllers/signalController.js
 const db = require('../config/db'); // Importando a conexão do banco de dados
+const express = require('express');
+const router = express.Router();
+
 
 const createSignal = (req, res) => {
     const { asset, entry_time, direction } = req.body;
@@ -23,3 +26,11 @@ const getSignals = (req, res) => {
         res.json(signals);
     });
 };
+
+module.exports = {
+    createSignal,
+    getSignals
+    // outras funções
+};
+router.post('/', createSignal);
+router.get('/', getSignals);
