@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Previsões de Volatilidade</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+      }
+      #log {
+        white-space: pre-wrap;
+        background-color: #f9f9f9;
+        padding: 20px;
+        border: 1px solid #ddd;
+        height: 400px;
+        overflow-y: scroll;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Previsões de Volatilidade</h1>
+    <div id="log"></div>
+
+    <script>
+      let tempo = 1;
+
+      function fetchPredictions() {
+        fetch("/api/previsaoVolacity/get")
+          .then((response) => response.json())
+          .then((data) => {
+            const logDiv = document.getElementById("log");
+            if (data.lenth === 0) {
+              logDiv.textContent = "Calculando previsões...";
+            } else {
+              data.forEach((prediction) => {
+                const logEntry = `
+                    Qtde: ${tempo}
+                    Ativo: ${prediction.symbol}
+                    Preço Atual: ${prediction.currentPrice}
+                    Horário do Último Tick: ${prediction.lastTickTime}
+                    Horário de Entrada Possível: ${prediction.possibleEntryTime}
+                    Previsão: ${prediction.predictedDirection}
+                    Tempo de Expiração Sugerido: ${prediction.expirationSuggestion}
+                    Porcentagem de Acerto: ${prediction.accuracy}%
+                    ##################\n`;
+                logDiv.textContent += logEntry;
+              });
+            }
+            //logDiv.textContent = "Qtde " + tempo;
+            tempo++;
+          })
+          .catch((error) => console.error("Erro ao buscar previsões:", error));
+      }
+
+      // Buscar previsões a cada X tempo
+      setInterval(fetchPredictions, 30000);
+      fetchPredictions(); // Buscar imediatamente ao carregar
+    </script>
+  </body>
+</html>
