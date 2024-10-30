@@ -14,9 +14,10 @@ app.use(cors());
 app.use(bodyParser.json());
 
 // Usando as rotas
-app.use("/api", routes);
+app.use("/", routes);
 // Servir arquivos estáticos da pasta 'public'
 app.use(express.static(path.join(__dirname, "client")));
+app.use(express.static(path.join(__dirname, "../client")));
 
 // Iniciando o servidor
 app.listen(PORT, () => {

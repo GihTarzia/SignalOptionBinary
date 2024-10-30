@@ -3,12 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Previsões de Volatilidade</title>
+    <title>Previsões de Digital/Binário</title>
     <style>
       body {
         font-family: Arial, sans-serif;
       }
-      #log {
+      #LogDiv {
         white-space: pre-wrap;
         background-color: #f9f9f9;
         padding: 20px;
@@ -22,15 +22,28 @@
     </style>
   </head>
   <body>
-    <h1>Previsões de Volatilidade</h1>
-    <div id="log"></div>
+    <h1>Previsões de Digital/Binário</h1>
+    <button id="enableSound">Ativar Som</button>
+    <div id="LogDiv">
+      <div id="log"></div>
+      <div id="log-divisoria"></div>
+    </div>
     <audio id="alertSound" src="sound2.mp3" preload="auto"></audio>
 
     <script>
       let tempo = 1;
+      let soundEnabled = false;
 
+      document.getElementById("enableSound").addEventListener("click", () => {
+        soundEnabled = true;
+        document
+          .getElementById("alertSound")
+          .play()
+          .catch(() => {});
+        setTimeout(myStopFunction, 2000);
+      });
       function fetchPredictions() {
-        fetch("/previsaoVolacity/get")
+        fetch("/previsaoDigitalBinary/get")
           .then((response) => response.json())
           .then((data) => {
             const logDiv = document.getElementById("log");
@@ -38,7 +51,7 @@
               logDiv.textContent = "Calculando previsões...";
             } else {
               data.forEach((prediction) => {
-                const logEntry = document.createElement('div');
+                const logEntry = document.createElement("div");
                 logEntry.innerHTML = `
                   Qtde: ${tempo}
                   Ativo: ${prediction.symbol}
@@ -50,18 +63,30 @@
                   Porcentagem de Acerto: ${prediction.accuracy}%
                   ##################<br>`;
 
-                if (parseFloat(prediction.accuracy) >= 80) {
-                  logEntry.classList.add('highlight');
-                  document.getElementById('alertSound').play();
+                if (parseFloat(prediction.accuracy) >= 75) {
+                  logEntry.classList.add("highlight");
+                  document.getElementById("alertSound").play();
+                  setTimeout(myStopFunction, 2000);
                 }
 
                 logDiv.appendChild(logEntry);
               });
+              //const logDiv2 = document.getElementById("log-divisoria");
+              //const logEntry2 = document.createElement("div-log-divisoria");
+              // logEntry2.innerHTML = 
+              //  "---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
+              //;
+              //logDiv2.appendChild(logEntry2);
               tempo++;
               logDiv.scrollTop = logDiv.scrollHeight; // Rolar para o final
             }
           })
           .catch((error) => console.error("Erro ao buscar previsões:", error));
+      }
+
+      function myStopFunction() {
+        document.getElementById("alertSound").pause();
+        document.getElementById("alertSound").currentTime = 0;
       }
 
       // Buscar previsões a cada X tempo
