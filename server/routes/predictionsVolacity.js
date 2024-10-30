@@ -1,9 +1,36 @@
 const express = require("express");
 const app = express.Router();
 const WebSocket = require("ws");
-const path = require('path');
+const path = require("path");
 
-const symbols = ["R_50", "R_75"];
+const symbols = [
+  "frxAUDCAD",
+  "frxAUDCHF",
+  "frxAUDJPY",
+  "frxAUDNZD",
+  "frxAUDUSD",
+  "frxEURAUD",
+  "frxEURCAD",
+  "frxEURCHF",
+  "frxEURGBP",
+  "frxEURJPY",
+  "frxEURNZD",
+  "frxEURUSD",
+  "frxGBPAUD",
+  "frxGBPCAD",
+  "frxGBPCHF",
+  "frxGBPJPY",
+  "frxGBPNZD",
+  "frxGBPUSD",
+  "frxNZDJPY",
+  "frxUSDSEK",
+  "frxUSDCAD",
+  "frxUSDJPY",
+  "frxUSDMXN",
+  "frxUSDNOK",
+  "frxUSDPLN",
+];
+
 const symbolData = {};
 
 // Inicializar dados para cada símbolo
@@ -21,7 +48,9 @@ const app_id = process.env.APP_ID || 1089;
 let socket;
 
 function connectWebSocket() {
-  socket = new WebSocket(`wss://ws.binaryws.com/websockets/v3?app_id=${app_id}`);
+  socket = new WebSocket(
+    `wss://ws.binaryws.com/websockets/v3?app_id=${app_id}`
+  );
 
   socket.onopen = () => {
     console.log("Conectado ao WebSocket da Deriv");
@@ -63,7 +92,9 @@ function requestTicks(symbol) {
 
 function calculateBollingerBands(prices, period = 20, multiplier = 2) {
   const sma = prices.slice(-period).reduce((a, b) => a + b, 0) / period;
-  const variance = prices.slice(-period).reduce((a, b) => a + Math.pow(b - sma, 2), 0) / period;
+  const variance =
+    prices.slice(-period).reduce((a, b) => a + Math.pow(b - sma, 2), 0) /
+    period;
   const stdDev = Math.sqrt(variance);
 
   return {
@@ -78,7 +109,13 @@ function calculateATR(prices, period = 14) {
   for (let i = 1; i < prices.length; i++) {
     const current = prices[i];
     const previous = prices[i - 1];
-    trueRanges.push(Math.max(current - previous, Math.abs(current - previous), Math.abs(previous - current)));
+    trueRanges.push(
+      Math.max(
+        current - previous,
+        Math.abs(current - previous),
+        Math.abs(previous - current)
+      )
+    );
   }
   return trueRanges.slice(-period).reduce((a, b) => a + b, 0) / period;
 }
@@ -99,7 +136,7 @@ function calculateRSI(prices, period = 14) {
   const avgLoss = losses.reduce((a, b) => a + b, 0) / losses.length || 0;
 
   const rs = avgGain / avgLoss || 0;
-  return 100 - (100 / (1 + rs));
+  return 100 - 100 / (1 + rs);
 }
 
 function calculatePredictionsVolatility(symbol) {
@@ -137,7 +174,9 @@ function calculatePredictionsVolatility(symbol) {
 
   const accuracy = (data.successfulPredictions / data.totalPredictions) * 100;
 
-  const lastTickTime = new Date(latestTicks[latestTicks.length - 1].epoch * 1000);
+  const lastTickTime = new Date(
+    latestTicks[latestTicks.length - 1].epoch * 1000
+  );
   const possibleEntryTime = new Date(lastTickTime.getTime() + 30000);
 
   data.result = {
@@ -155,7 +194,7 @@ function calculatePredictionsVolatility(symbol) {
 
 app.get("/get", (req, res) => {
   if (!socket || socket.readyState === WebSocket.CLOSED) {
-    connectWebSocket();
+    //  connectWebSocket();
   } else {
     setTimeout(() => {
       const results = Object.values(symbolData)
@@ -167,7 +206,9 @@ app.get("/get", (req, res) => {
 });
 
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "../../client", "indexPredictionsVolacity.html"));
+  res.sendFile(
+    path.join(__dirname, "../../client", "indexPredictionsVolacity.html")
+  );
 });
 
 module.exports = app;

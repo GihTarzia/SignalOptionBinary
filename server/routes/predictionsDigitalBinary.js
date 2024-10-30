@@ -3,38 +3,16 @@ const app = express.Router();
 const WebSocket = require("ws");
 const path = require("path");
 
-const symbols = [
-  "frxAUDCAD",
-  "frxAUDCHF",
-  "frxAUDJPY",
-  "frxAUDNZD",
-  "frxAUDUSD",
-  "frxEURAUD",
-  "frxEURCAD",
-  "frxEURCHF",
-  "frxEURGBP",
-  "frxEURJPY",
-  "frxEURNZD",
-  "frxEURUSD",
-  "frxGBPAUD",
-  "frxGBPCAD",
-  "frxGBPCHF",
-  "frxGBPJPY",
-  "frxGBPNOK",
-  "frxGBPNZD",
-  "frxGBPUSD",
-  "frxNZDJPY",
-  "frxNZDUSD",
-  "frxUSDCAD",
-  "frxUSDCHF",
-  "frxUSDJPY",
-  "frxUSDMXN",
-  "frxUSDNOK",
-  "frxUSDPLN",
-  "frxUSDSEK",
-];
 
-let symbolData = {};
+const symbols = [
+    "frxAUDCAD", "frxAUDCHF", "frxAUDJPY", "frxAUDNZD", "frxAUDUSD",
+    "frxEURAUD", "frxEURCAD", "frxEURCHF", "frxEURGBP", "frxEURJPY",
+    "frxEURNZD", "frxEURUSD", "frxGBPAUD", "frxGBPCAD", "frxGBPCHF",
+    "frxGBPJPY", "frxGBPNZD", "frxGBPUSD", "frxNZDJPY", "frxUSDSEK",
+    "frxUSDCAD", "frxUSDJPY", "frxUSDMXN", "frxUSDNOK", "frxUSDPLN",
+  ];
+  
+const symbolData = {};
 
 // Inicializar dados para cada símbolo
 symbols.forEach((symbol) => {
@@ -43,10 +21,8 @@ symbols.forEach((symbol) => {
     successfulPredictions: 0,
     totalPredictions: 0,
     lastPredictionTime: 0,
-    result: null,
   };
 });
-
 // Função para conectar ao WebSocket
 function connectWebSocket() {
   const app_id = process.env.APP_ID || 1089;
@@ -68,9 +44,16 @@ function connectWebSocket() {
       const { symbol, quote, epoch } = message.tick;
       if (symbolData[symbol]) {
         symbolData[symbol].ticks.push({ quote, epoch });
-        if (symbolData[symbol].ticks.length > 60) {
-          symbolData[symbol].ticks.shift(); // Mantém apenas os últimos 60 ticks (aproximadamente 1 minuto)
-        }
+        calculatePredictions(symbol);
+      }
+    } else if (message.history) {
+      const { symbol, history } = message;
+      if (symbolData[symbol]) {
+        //symbolData[symbol].ticks = history;
+        const fifteenMinutesAgoEpoch = Math.floor(Date.now() / 1000) - 1 * 60;
+        symbolData[symbol].ticks = history.filter(
+          (tick) => tick.epoch >= fifteenMinutesAgoEpoch
+        );
         calculatePredictions(symbol);
       }
     }
@@ -79,7 +62,6 @@ function connectWebSocket() {
   socket.onerror = (error) => {
     console.error("Erro no WebSocket:", error);
   };
-
   socket.onclose = () => {
     console.log("Conexão ao WebSocket encerrada, tentando reconectar...");
     setTimeout(connectWebSocket, 5000);
@@ -161,10 +143,21 @@ function calculatePredictions(symbol) {
     accuracy: accuracy.toFixed(2),
   };
 
+  //console.log('##################');
+  //console.log(`Ativo: ${symbol}`);
+  //console.log(`Preço Atual: ${lastPrice}`);
+  //console.log(`Horário do Último Tick: ${lastTickTime.toLocaleTimeString()}`);
+  //console.log(`Horário de Entrada Possível: ${possibleEntryTime.toLocaleTimeString()}`);
+  //console.log(`Previsão: ${predictedDirection}`);
+  //console.log(`Tempo de Expiração Sugerido: ${expirationSuggestion}`);
+  //console.log(`Porcentagem de Acerto: ${accuracy.toFixed(2)}%`);
+  //console.log('##################');
+
   data.lastPredictionTime = now;
 }
 
 // Rota para iniciar previsões
+
 app.get("/get", (req, res) => {
   const results = Object.values(symbolData)
     .map((data) => data.result)
@@ -174,12 +167,15 @@ app.get("/get", (req, res) => {
     res.json(results);
   }
 });
-// Iniciar a conexão do WebSocket
-connectWebSocket();
-// Rota para servir o arquivo HTML
 
+// Iniciar a conexão do WebSocket
+//connectWebSocket();
+
+// Rota para servir o arquivo HTML
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "../../client", "indexPredictionsDigitalBinary.html"));
+  res.sendFile(
+    path.join(__dirname, "../../client", "indexPredictionsDigitalBinary.html")
+  );
 });
 
 module.exports = app;

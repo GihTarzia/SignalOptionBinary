@@ -7,9 +7,8 @@ const symbols = [
   "frxAUDCAD", "frxAUDCHF", "frxAUDJPY", "frxAUDNZD", "frxAUDUSD",
   "frxEURAUD", "frxEURCAD", "frxEURCHF", "frxEURGBP", "frxEURJPY",
   "frxEURNZD", "frxEURUSD", "frxGBPAUD", "frxGBPCAD", "frxGBPCHF",
-  "frxGBPJPY", "frxGBPNOK", "frxGBPNZD", "frxGBPUSD", "frxNZDJPY",
-  "frxNZDUSD", "frxUSDCAD", "frxUSDCHF", "frxUSDJPY", "frxUSDMXN",
-  "frxUSDNOK", "frxUSDPLN", "frxUSDSEK",
+  "frxGBPJPY", "frxGBPNZD", "frxGBPUSD", "frxNZDJPY", "frxUSDSEK",
+  "frxUSDCAD", "frxUSDJPY", "frxUSDMXN", "frxUSDNOK", "frxUSDPLN",
 ];
 
 let symbolData = {};
@@ -46,8 +45,6 @@ function connectWebSocket() {
       console.log(`Recebido tick para ${symbol}: ${quote} em ${new Date(epoch * 1000).toLocaleTimeString()}`);
       if (symbolData[symbol]) {
         symbolData[symbol].ticks.push({ quote, epoch });
-        symbolData[symbol].lastPrice = quote;
-        console.log(`Total de ticks para ${symbol}: ${symbolData[symbol].ticks.length}`);
         const fifteenMinutesAgoEpoch = Math.floor(Date.now() / 1000) - 15 * 60;
         symbolData[symbol].ticks = symbolData[symbol].ticks.filter(
           (tick) => tick.epoch >= fifteenMinutesAgoEpoch
@@ -130,6 +127,21 @@ function calculateBollingerBands(prices, period = 20) {
   };
 }
 
+// Função para calcular o ATR
+function calculateATR(prices, period = 14) {
+  if (prices.length < period) return null;
+  let trs = [];
+  for (let i = 1; i < prices.length; i++) {
+    const currentHigh = prices[i];
+    const currentLow = prices[i];
+    const previousClose = prices[i - 1];
+    const tr = Math.max(currentHigh - currentLow, Math.abs(currentHigh - previousClose), Math.abs(currentLow - previousClose));
+    trs.push(tr);
+  }
+  const atr = trs.slice(-period).reduce((sum, value) => sum + value, 0) / period;
+  return atr;
+}
+
 // Função para calcular previsões
 function calculatePredictions(symbol) {
   console.log(`Calculando previsões para ${symbol}`);
@@ -143,62 +155,67 @@ function calculatePredictions(symbol) {
   const latestTicks = data.ticks.slice(-300);
   const prices = latestTicks.map((tick) => tick.quote);
 
-  const emaShort1 = calculateEMA(prices, 9);
-  const emaLong1 = calculateEMA(prices, 21);
+  // Calcular indicadores
+  const emaShort = calculateEMA(prices, 9);
+  const emaLong = calculateEMA(prices, 21);
 
-  const emaShort5 = calculateEMA(prices.slice(-5 * 60), 9);
-  const emaLong5 = calculateEMA(prices.slice(-5 * 60), 21);
-
-  const emaShort15 = calculateEMA(prices.slice(-15 * 60), 9);
-  const emaLong15 = calculateEMA(prices.slice(-15 * 60), 21);
-
-  const macd1 = emaShort1.slice(-emaLong1.length).map((ema, index) => ema - emaLong1[index]);
-  const macdSignal1 = calculateEMA(macd1, 9);
-
-  const macd5 = emaShort5.slice(-emaLong5.length).map((ema, index) => ema - emaLong5[index]);
-  const macdSignal5 = calculateEMA(macd5, 9);
-
-  const macd15 = emaShort15.slice(-emaLong15.length).map((ema, index) => ema - emaLong15[index]);
-  const macdSignal15 = calculateEMA(macd15, 9);
+  const macd = emaShort.slice(-emaLong.length).map((ema, index) => ema - emaLong[index]);
+  const macdSignal = calculateEMA(macd, 9);
 
   const rsi = calculateRSI(prices, 14);
   const bollingerBands = calculateBollingerBands(prices);
+  const atr = calculateATR(prices, 14);
 
   let predictedDirection = "Neutro";
-  let expirationSuggestion = "1 minuto";
+  let expirationSuggestion = "1 minuto"; 
+  let confidence = 0; 
 
+  // Estratégia de confirmação com múltiplos indicadores
   if (
-    macd1[macd1.length - 1] > macdSignal1[macdSignal1.length - 1] &&
-    macd5[macd5.length - 1] > macdSignal5[macdSignal5.length - 1] &&
-    macd15[macd15.length - 1] > macdSignal15[macdSignal15.length - 1] &&
-    rsi < 70
+    macd[macd.length - 1] > macdSignal[macdSignal.length - 1] &&
+    rsi < 70 &&
+    prices[prices.length - 1] < bollingerBands.middleBand &&
+    atr > 0.0005 // Ajuste o valor conforme necessário
   ) {
     predictedDirection = "Comprar";
-    expirationSuggestion = "5 minutos";
+    expirationSuggestion = "5 minutos"; 
+    confidence += 70; 
   } else if (
-    macd1[macd1.length - 1] < macdSignal1[macdSignal1.length - 1] &&
-    macd5[macd5.length - 1] < macdSignal5[macdSignal5.length - 1] &&
-    macd15[macd15.length - 1] < macdSignal15[macdSignal15.length - 1] &&
-    rsi > 30
+    macd[macd.length - 1] < macdSignal[macdSignal.length - 1] &&
+    rsi > 30 &&
+    prices[prices.length - 1] > bollingerBands.middleBand &&
+    atr > 0.0005 // Ajuste o valor conforme necessário
   ) {
     predictedDirection = "Vender";
-    expirationSuggestion = "5 minutos";
+    expirationSuggestion = "5 minutos"; 
+    confidence += 70; 
   }
 
   if (bollingerBands && prices[prices.length - 1] > bollingerBands.upperBand) {
     predictedDirection = "Vender";
-    expirationSuggestion = "3 minutos";
+    expirationSuggestion = "3 minutos"; 
+    confidence += 20; 
   } else if (bollingerBands && prices[prices.length - 1] < bollingerBands.lowerBand) {
     predictedDirection = "Comprar";
-    expirationSuggestion = "3 minutos";
+    expirationSuggestion = "3 minutos"; 
+    confidence += 20; 
   }
 
-  // Validação da previsão
-  const previousPrice = prices[prices.length - 2];
+  if (predictedDirection === "Comprar" && rsi < 70) {
+    confidence += 10; 
+  } else if (predictedDirection === "Vender" && rsi > 30) {
+    confidence += 10; 
+  }
+
+  // Validação da previsão ao término do período de expiração
+  const futureTicks = data.ticks.slice(-60); // Assumindo que temos 1 tick por segundo (ajuste conforme necessário)
+  const futurePrices = futureTicks.map((tick) => tick.quote);
+  const futurePrice = futurePrices[futurePrices.length - 1]; // Preço ao final do período
+
   let success = false;
   if (
-    (predictedDirection === "Comprar" && prices[prices.length - 1] > previousPrice) ||
-    (predictedDirection === "Vender" && prices[prices.length - 1] < previousPrice)
+    (predictedDirection === "Comprar" && futurePrice > prices[prices.length - 1]) ||
+    (predictedDirection === "Vender" && futurePrice < prices[prices.length - 1])
   ) {
     success = true;
     data.successfulPredictions++;
@@ -223,6 +240,7 @@ function calculatePredictions(symbol) {
     expirationSuggestion: expirationSuggestion,
     overallAccuracy: overallAccuracy.toFixed(2),
     individualAccuracy: individualAccuracy,
+    confidence: confidence,
     lastPredictionSuccess: success
   };
 
@@ -230,6 +248,7 @@ function calculatePredictions(symbol) {
 
   console.log(`Previsão para ${symbol}: ${JSON.stringify(data.result)}`);
 }
+
 // Rota para iniciar previsões
 app.get("/get", (req, res) => {
   console.log("Requisição recebida na rota /get");
@@ -245,7 +264,7 @@ app.get("/get", (req, res) => {
 });
 
 // Iniciar a conexão do WebSocket
-connectWebSocket();
+//connectWebSocket();
 
 // Rota para servir o arquivo HTML
 app.get("/", (req, res) => {

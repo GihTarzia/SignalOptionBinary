@@ -13,6 +13,7 @@
   "license": "ISC",
   "dependencies": {
     "@deriv/deriv-api": "^1.0.15",
+    "@tensorflow/tfjs": "^4.22.0",
     "axios": "^1.7.7",
     "body-parser": "^1.19.0",
     "cors": "^2.8.5",
@@ -21,6 +22,7 @@
     "fetch": "^1.1.0",
     "mysql2": "^2.2.5",
     "path": "^0.12.7",
+    "sqlite3": "^5.1.7",
     "ws": "^8.18.0"
   }
 }

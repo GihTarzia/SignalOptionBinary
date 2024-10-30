@@ -124,6 +124,6 @@ app.get("/", (req, res) => {
   res.json(results);
 });
 
-connectWebSocket();
+//connectWebSocket();
 
 module.exports = app;

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Previsões de Binário</title>
+  <title>Previsões de Binário - Por Vela</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -63,7 +63,7 @@
   </style>
 </head>
 <body>
-  <h1>Previsões de Binário</h1>
+  <h1>Previsões de Binário - Por Vela</h1>
   <button id="enableSound">Ativar Som</button>
   <button id="viewHistory">Ver Histórico de Ativos Copiados</button>
   <div id="LogDiv">
@@ -100,42 +100,41 @@
     }
 
     function fetchPredictions() {
-      fetch("/previsaoDigitalBinary/get")
+      fetch("/previsaoDigitalBinary/get") // Alterado para o endpoint correto
         .then((response) => response.json())
         .then((data) => {
           const logDiv = document.getElementById("log");
-          //logDiv.innerHTML = ''; // Limpar conteúdo anterior
+          logDiv.innerHTML = ''; // Limpar conteúdo anterior
           if (data.length === 0) {
             const noDataEntry = document.createElement("div");
             noDataEntry.textContent = "Calculando previsões...";
             logDiv.appendChild(noDataEntry);
           } else {
-            data = data.sort((a, b) => parseFloat(a.accuracy) - parseFloat(b.accuracy));
             data.forEach((prediction) => {
-              const logEntry = document.createElement("div");
               const ativoText = prediction.symbol.replace('frx', '');
               const blockText = `
                 Qtde: ${tempo}
                 Ativo: ${ativoText}
                 Preço Atual: ${prediction.currentPrice}
-                Horário do Último Tick: ${prediction.lastTickTime}
-                Horário de Entrada Possível: ${prediction.possibleEntryTime}
-                Previsão: ${prediction.predictedDirection}
-                Tempo de Expiração Sugerido: ${prediction.expirationSuggestion}
-                Porcentagem de Acerto: ${prediction.accuracy}%`;
+                Horário do Último Tick: ${new Date(prediction.lastTickTime).toLocaleString()}
+                Horário de Entrada Possível: ${new Date(prediction.possibleEntryTime).toLocaleString()}
+                Previsão: ${prediction.direction}
+                Tempo de Expiração Sugerido: ${prediction.expiration}
+                Porcentagem de Acerto: ${prediction.confidence}%`;
 
+              const logEntry = document.createElement("div");
               logEntry.innerHTML = `
                 <strong>Qtde:</strong> ${tempo}
                 <strong>Ativo:</strong> ${ativoText} <button class="copy-button" onclick="copyAsset('${ativoText}', \`${blockText}\`)">Copiar Ativo</button>
                 <strong>Preço Atual:</strong> ${prediction.currentPrice}
-                <strong>Horário do Último Tick:</strong> ${prediction.lastTickTime}
-                <strong>Horário de Entrada Possível:</strong> ${prediction.possibleEntryTime}
-                <strong>Previsão:</strong> ${prediction.predictedDirection}
-                <strong>Tempo de Expiração Sugerido:</strong> ${prediction.expirationSuggestion}
-                <strong>Porcentagem de Acerto:</strong> ${prediction.accuracy}%
+                <strong>Horário do Último Tick:</strong> ${new Date(prediction.lastTickTime).toLocaleString()}
+                <strong>Horário de Entrada Possível:</strong> ${new Date(prediction.possibleEntryTime).toLocaleString()}
+                <strong>Previsão:</strong> ${prediction.direction}
+                <strong>Tempo de Expiração Sugerido:</strong> ${prediction.expiration}
+                <strong>Porcentagem de Acerto:</strong> ${prediction.confidence}%
                 ##################<br>`;
 
-              if (parseFloat(prediction.accuracy) >= 75) {
+              if (parseFloat(prediction.confidence) >= 75) {
                 logEntry.classList.add("highlight");
                 if (soundEnabled) {
                   document.getElementById("alertSound").play();

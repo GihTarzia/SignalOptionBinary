@@ -104,13 +104,13 @@
         .then((response) => response.json())
         .then((data) => {
           const logDiv = document.getElementById("log");
-          logDiv.innerHTML = ''; // Limpar conteúdo anterior
+          //logDiv.innerHTML = ''; // Limpar conteúdo anterior
           if (data.length === 0) {
             const noDataEntry = document.createElement("div");
             noDataEntry.textContent = "Calculando previsões...";
             logDiv.appendChild(noDataEntry);
           } else {
-            data = data.sort((a, b) => parseFloat(a.accuracy) - parseFloat(b.accuracy));
+            data = data.sort((a, b) => parseFloat(a.confidence) - parseFloat(b.confidence));
             data.forEach((prediction) => {
               const logEntry = document.createElement("div");
               const ativoText = prediction.symbol.replace('frx', '');
@@ -122,7 +122,9 @@
                 Horário de Entrada Possível: ${prediction.possibleEntryTime}
                 Previsão: ${prediction.predictedDirection}
                 Tempo de Expiração Sugerido: ${prediction.expirationSuggestion}
-                Porcentagem de Acerto: ${prediction.accuracy}%`;
+                    <strong>Porcentagem de Acerto Médio:</strong> ${prediction.overallAccuracy}%
+                <strong>Previsão:</strong> ${prediction.individualAccuracy}
+                <strong>Porcentagem de Acerto:</strong> ${prediction.confidence}%`;
 
               logEntry.innerHTML = `
                 <strong>Qtde:</strong> ${tempo}
@@ -132,10 +134,12 @@
                 <strong>Horário de Entrada Possível:</strong> ${prediction.possibleEntryTime}
                 <strong>Previsão:</strong> ${prediction.predictedDirection}
                 <strong>Tempo de Expiração Sugerido:</strong> ${prediction.expirationSuggestion}
-                <strong>Porcentagem de Acerto:</strong> ${prediction.accuracy}%
+                <strong>Porcentagem de Acerto Médio:</strong> ${prediction.overallAccuracy}%
+                <strong>Previsão:</strong> ${prediction.individualAccuracy}
+                <strong>Porcentagem de Acerto:</strong> ${prediction.confidence}%
                 ##################<br>`;
 
-              if (parseFloat(prediction.accuracy) >= 75) {
+              if (parseFloat(prediction.confidence) >= 75) {
                 logEntry.classList.add("highlight");
                 if (soundEnabled) {
                   document.getElementById("alertSound").play();
@@ -177,8 +181,8 @@
       }
     }
 
-    // Buscar previsões a cada 30 segundos
-    setInterval(fetchPredictions, 30000);
+    // Buscar previsões a cada 50 segundos
+    setInterval(fetchPredictions, 50000);
     fetchPredictions(); // Buscar imediatamente ao carregar
   </script>
 </body>
