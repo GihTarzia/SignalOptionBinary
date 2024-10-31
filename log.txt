@@ -1,0 +1,1003 @@
+Sinal forte detectado para frxUSDCAD com confiança 1
+Processando dados para frxAUDNZD. Ticks acumulados: 101
+Analisando frxAUDNZD - Último preço: 1.10129
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.26143192112610636,
+    volume: 0.8421052631421486,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.5468506289662616,
+  finalConfidence: 0.5468506289662616
+}
+Confiança insuficiente para frxAUDNZD: 0.5468506289662616
+Processando dados para frxUSDJPY. Ticks acumulados: 101
+Analisando frxUSDJPY - Último preço: 152.014
+Detalhes do cálculo de confiança: {
+  scores: { trend: 1, indicator: 0.5198607490157642, volume: 1, pattern: 0.25 },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.7434582247047291,
+  finalConfidence: 0.7434582247047291
+}
+Sinal forte detectado para frxUSDJPY com confiança 1
+Processando dados para frxGBPUSD. Ticks acumulados: 101
+Analisando frxGBPUSD - Último preço: 1.28842
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.4922053465397296,
+    volume: 1,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6476616039619189,
+  finalConfidence: 0.6476616039619189
+}
+Confiança insuficiente para frxGBPUSD: 0.6476616039619189
+Processando dados para frxUSDSEK. Ticks acumulados: 101
+Analisando frxUSDSEK - Último preço: 10.66136
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.4622502067476031,
+    volume: 0.9780564263342576,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.7217863472911324,
+  finalConfidence: 0.7217863472911324
+}
+Sinal forte detectado para frxUSDSEK com confiança 1
+Processando dados para frxUSDJPY. Ticks acumulados: 101
+Analisando frxUSDJPY - Último preço: 152.014
+Detalhes do cálculo de confiança: {
+  scores: { trend: 1, indicator: 0.4353314026833742, volume: 0, pattern: 0.25 },
+  weights: { trend: 0.43, indicators: 0.38, volume: 0, patterns: 0.19 },
+  rawConfidence: 0.6429259330196821,
+  finalConfidence: 0.6429259330196821
+}
+Confiança insuficiente para frxUSDJPY: 0.6429259330196821
+Processando dados para frxAUDNZD. Ticks acumulados: 101
+Analisando frxAUDNZD - Último preço: 1.1013
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.17432838635381415,
+    volume: 0.7999999999857893,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.5122985159033021,
+  finalConfidence: 0.5122985159033021
+}
+Confiança insuficiente para frxAUDNZD: 0.5122985159033021
+Processando dados para frxUSDCAD. Ticks acumulados: 101
+Analisando frxUSDCAD - Último preço: 1.39124
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.3938678586000748,
+    volume: 1,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6181603575800224,
+  finalConfidence: 0.6181603575800224
+}
+Sinal forte detectado para frxUSDCAD com confiança 1
+Processando dados para frxAUDUSD. Ticks acumulados: 101
+Analisando frxAUDUSD - Último preço: 0.65768
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.42498135198584,
+    volume: 1,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.712494405595752,
+  finalConfidence: 0.712494405595752
+}
+Confiança insuficiente para frxAUDUSD: 0.712494405595752
+Processando dados para frxEURCAD. Ticks acumulados: 101
+Analisando frxEURCAD - Último preço: 1.51246
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.5747,
+    volume: 1,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6699099999999999,
+  finalConfidence: 0.6699099999999999
+}
+Confiança insuficiente para frxEURCAD: 0.6699099999999999
+Processando dados para frxNZDJPY. Ticks acumulados: 101
+Analisando frxNZDJPY - Último preço: 90.773
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.34459158163957765,
+    volume: 0.8000000000034104,
+    pattern: 0.2833333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6558774744925553,
+  finalConfidence: 0.6558774744925553
+}
+Confiança insuficiente para frxNZDJPY: 0.6558774744925553
+Processando dados para frxEURAUD. Ticks acumulados: 101
+Analisando frxEURAUD - Último preço: 1.65315
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.32176820576391274,
+    volume: 1,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6815304617291739,
+  finalConfidence: 0.6815304617291739
+}
+Confiança insuficiente para frxEURAUD: 0.6815304617291739
+Processando dados para frxUSDPLN. Ticks acumulados: 101
+Analisando frxUSDPLN - Último preço: 4.0054
+Detalhes do cálculo de confiança: {
+  scores: { trend: 1, indicator: 0.4943362524487106, volume: 1, pattern: 0 },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6983008757346132,
+  finalConfidence: 0.6983008757346132
+}
+Sinal forte detectado para frxUSDPLN com confiança 1
+Processando dados para frxAUDCHF. Ticks acumulados: 101
+Analisando frxAUDCHF - Último preço: 0.56816
+Detalhes do cálculo de confiança: {
+  scores: { trend: 1, indicator: 0.2768494355623404, volume: 1, pattern: 0.25 },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.670554830668702,
+  finalConfidence: 0.670554830668702
+}
+Sinal forte detectado para frxAUDCHF com confiança 1
+Processando dados para frxGBPNZD. Ticks acumulados: 101
+Analisando frxGBPNZD - Último preço: 2.15739
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.5333045708198003,
+    volume: 0.833333333336417,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6241580379132236,
+  finalConfidence: 0.6241580379132236
+}
+Confiança insuficiente para frxGBPNZD: 0.6241580379132236
+Processando dados para frxUSDMXN. Ticks acumulados: 101
+Analisando frxUSDMXN - Último preço: 20.0129
+Detalhes do cálculo de confiança: {
+  scores: { trend: 1, indicator: 0.3211479269524352, volume: 0, pattern: 0.25 },
+  weights: { trend: 0.43, indicators: 0.38, volume: 0, patterns: 0.19 },
+  rawConfidence: 0.5995362122419253,
+  finalConfidence: 0.5995362122419253
+}
+Confiança insuficiente para frxUSDMXN: 0
+Processando dados para frxGBPJPY. Ticks acumulados: 101
+Analisando frxGBPJPY - Último preço: 195.857
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.58822,
+    volume: 0.9600000000043655,
+    pattern: 0.3
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6759660000008731,
+  finalConfidence: 0.6759660000008731
+}
+Confiança insuficiente para frxGBPJPY: 0.6759660000008731
+Processando dados para frxGBPAUD. Ticks acumulados: 101
+Analisando frxGBPAUD - Último preço: 1.95902
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.4690488381613098,
+    volume: 0.9696969696940334,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6346540453871995,
+  finalConfidence: 0.6346540453871995
+}
+Confiança insuficiente para frxGBPAUD: 0.6346540453871995
+Processando dados para frxGBPCAD. Ticks acumulados: 101
+Analisando frxGBPCAD - Último preço: 1.7923
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.4883559037047521,
+    volume: 1,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.7315067711114257,
+  finalConfidence: 0.7315067711114257
+}
+Confiança insuficiente para frxGBPCAD: 0.24383559037227998
+Processando dados para frxEURCHF. Ticks acumulados: 101
+Analisando frxEURCHF - Último preço: 0.93925
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.3076426475410489,
+    volume: 0,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.43, indicators: 0.38, volume: 0, patterns: 0.19 },
+  rawConfidence: 0.591237539398932,
+  finalConfidence: 0.591237539398932
+}
+Confiança insuficiente para frxEURCHF: 0.591237539398932
+Processando dados para frxEURNZD. Ticks acumulados: 101
+Analisando frxEURNZD - Último preço: 1.82064
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.25312603024449754,
+    volume: 1,
+    pattern: 0.2625
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6653128090733492,
+  finalConfidence: 0.6653128090733492
+}
+Confiança insuficiente para frxEURNZD: 0.6653128090733492
+Processando dados para frxEURJPY. Ticks acumulados: 101
+Analisando frxEURJPY - Último preço: 165.284
+Detalhes do cálculo de confiança: {
+  scores: { trend: 1, indicator: 0.2723586102579189, volume: 0, pattern: 0.25 },
+  weights: { trend: 0.43, indicators: 0.38, volume: 0, patterns: 0.19 },
+  rawConfidence: 0.5809962718980092,
+  finalConfidence: 0.5809962718980092
+}
+Confiança insuficiente para frxEURJPY: 0.5809962718980092
+Processando dados para frxGBPCHF. Ticks acumulados: 101
+Analisando frxGBPCHF - Último preço: 1.11305
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.48521491679593043,
+    volume: 1,
+    pattern: 0.225
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6418144750387791,
+  finalConfidence: 0.6418144750387791
+}
+Confiança insuficiente para frxGBPCHF: 0.6418144750387791
+Processando dados para frxAUDCAD. Ticks acumulados: 101
+Analisando frxAUDCAD - Último preço: 0.9149
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.4535321344755301,
+    volume: 1,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.7210596403426591,
+  finalConfidence: 0.7210596403426591
+}
+Confiança insuficiente para frxAUDCAD: 0.7210596403426591
+Processando dados para frxEURUSD. Ticks acumulados: 101
+Analisando frxEURUSD - Último preço: 1.08725
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.4661815952222549,
+    volume: 0,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.43, indicators: 0.38, volume: 0, patterns: 0.19 },
+  rawConfidence: 0.5439823395177902,
+  finalConfidence: 0.5439823395177902
+}
+Confiança insuficiente para frxEURUSD: 0.5439823395177902
+Processando dados para frxEURGBP. Ticks acumulados: 101
+Analisando frxEURGBP - Último preço: 0.84386
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.61042,
+    volume: 0,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.43, indicators: 0.38, volume: 0, patterns: 0.19 },
+  rawConfidence: 0.7062929333333333,
+  finalConfidence: 0.7062929333333333
+}
+Confiança insuficiente para frxEURGBP: 0.7062929333333333
+Processando dados para frxUSDNOK. Ticks acumulados: 101
+Analisando frxUSDNOK - Último preço: 11.00016
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.491325871709129,
+    volume: 0.12151898734426776,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.5592015589815922,
+  finalConfidence: 0.5592015589815922
+}
+Confiança insuficiente para frxUSDNOK: 0.5592015589815922
+Processando dados para frxAUDJPY. Ticks acumulados: 101
+Analisando frxAUDJPY - Último preço: 99.979
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.2008904226176908,
+    volume: 1,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.5602671267853071,
+  finalConfidence: 0.5602671267853071
+}
+Confiança insuficiente para frxAUDJPY: 0.5602671267853071
+Processando dados para frxGBPCHF. Ticks acumulados: 101
+Analisando frxGBPCHF - Último preço: 1.11303
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.4092487786247715,
+    volume: 1,
+    pattern: 0.225
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.7065246335874313,
+  finalConfidence: 0.7065246335874313
+}
+Confiança insuficiente para frxGBPCHF: 0.7065246335952756
+Processando dados para frxEURUSD. Ticks acumulados: 101
+Analisando frxEURUSD - Último preço: 1.08725
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.41062032925833447,
+    volume: 0,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.43, indicators: 0.38, volume: 0, patterns: 0.19 },
+  rawConfidence: 0.5228690584515004,
+  finalConfidence: 0.5228690584515004
+}
+Confiança insuficiente para frxEURUSD: 0
+Processando dados para frxAUDCAD. Ticks acumulados: 101
+Analisando frxAUDCAD - Último preço: 0.91489
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.23157070328086551,
+    volume: 1,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.5669712109842596,
+  finalConfidence: 0.5669712109842596
+}
+Confiança insuficiente para frxAUDCAD: 0.5669712109842596
+Processando dados para frxAUDJPY. Ticks acumulados: 101
+Analisando frxAUDJPY - Último preço: 99.978
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.34798210938278284,
+    volume: 1,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6043946328148347,
+  finalConfidence: 0.6043946328148347
+}
+Confiança insuficiente para frxAUDJPY: 0.6043946328148347
+Processando dados para frxEURGBP. Ticks acumulados: 101
+Analisando frxEURGBP - Último preço: 0.84388
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.4638464528186551,
+    volume: 1,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.7241539358455965,
+  finalConfidence: 0.7241539358455965
+}
+Confiança insuficiente para frxEURGBP: 0.7241539358455965
+Processando dados para frxUSDNOK. Ticks acumulados: 101
+Analisando frxUSDNOK - Último preço: 11.00023
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.41493695125352226,
+    volume: 0.2807017543892141,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.5681214362538994,
+  finalConfidence: 0.5681214362538994
+}
+Sinal forte detectado para frxUSDNOK com confiança 1
+Processando dados para frxGBPCAD. Ticks acumulados: 101
+Analisando frxGBPCAD - Último preço: 1.79229
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.538117991758844,
+    volume: 0.9523809523880015,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.7369115880052536,
+  finalConfidence: 0.7369115880052536
+}
+Confiança insuficiente para frxGBPCAD: 0.3684557940026268
+Processando dados para frxGBPAUD. Ticks acumulados: 101
+Analisando frxGBPAUD - Último preço: 1.959
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.4394220338472926,
+    volume: 1,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6318266101541877,
+  finalConfidence: 0.6318266101541877
+}
+Confiança insuficiente para frxGBPAUD: 0.631826610147173
+Processando dados para frxEURCHF. Ticks acumulados: 101
+Analisando frxEURCHF - Último preço: 0.93924
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.2794106945842787,
+    volume: 1,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.5813232083752836,
+  finalConfidence: 0.5813232083752836
+}
+Confiança insuficiente para frxEURCHF: 0.5813232083817377
+Processando dados para frxEURJPY. Ticks acumulados: 101
+Analisando frxEURJPY - Último preço: 165.283
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.24140321382987862,
+    volume: 0.9090909090967813,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6417391459683198,
+  finalConfidence: 0.6417391459683198
+}
+Confiança insuficiente para frxEURJPY: 0.6417391459683198
+Processando dados para frxEURNZD. Ticks acumulados: 101
+Analisando frxEURNZD - Último preço: 1.82064
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.17964819964769627,
+    volume: 0,
+    pattern: 0.2625
+  },
+  weights: { trend: 0.43, indicators: 0.38, volume: 0, patterns: 0.19 },
+  rawConfidence: 0.4406413158661246,
+  finalConfidence: 0.4406413158661246
+}
+Confiança insuficiente para frxEURNZD: 0
+Processando dados para frxAUDCHF. Ticks acumulados: 101
+Analisando frxAUDCHF - Último preço: 0.56816
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.2928408477854566,
+    volume: 0,
+    pattern: 0.25
+  },
+  weights: { trend: 0.43, indicators: 0.38, volume: 0, patterns: 0.19 },
+  rawConfidence: 0.48127952215847347,
+  finalConfidence: 0.48127952215847347
+}
+Confiança insuficiente para frxAUDCHF: 0.48127952215847347
+Processando dados para frxUSDPLN. Ticks acumulados: 101
+Analisando frxUSDPLN - Último preço: 4.0054
+Detalhes do cálculo de confiança: {
+  scores: { trend: 1, indicator: 0.4875068425588931, volume: 0, pattern: 0 },
+  weights: { trend: 0.43, indicators: 0.38, volume: 0, patterns: 0.19 },
+  rawConfidence: 0.6152526001723794,
+  finalConfidence: 0.6152526001723794
+}
+Confiança insuficiente para frxUSDPLN: 0.6152526001723794
+Processando dados para frxEURAUD. Ticks acumulados: 101
+Analisando frxEURAUD - Último preço: 1.65316
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.3447713987666754,
+    volume: 0.9090909090964144,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.5827496014492856,
+  finalConfidence: 0.5827496014492856
+}
+Confiança insuficiente para frxEURAUD: 0.5827496014492856
+Processando dados para frxGBPJPY. Ticks acumulados: 101
+Analisando frxGBPJPY - Último preço: 195.853
+Detalhes do cálculo de confiança: {
+  scores: { trend: 1, indicator: 0.4449264307771462, volume: 1, pattern: 0.25 },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.7209779292331439,
+  finalConfidence: 0.7209779292331439
+}
+Confiança insuficiente para frxGBPJPY: 0.7209779292331439
+Processando dados para frxUSDMXN. Ticks acumulados: 101
+Analisando frxUSDMXN - Último preço: 20.0139
+Detalhes do cálculo de confiança: {
+  scores: { trend: 1, indicator: 0.6478, volume: 1, pattern: 0.25 },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.78184,
+  finalConfidence: 0.78184
+}
+Sinal forte detectado para frxUSDMXN com confiança 0.78184
+Processando dados para frxGBPNZD. Ticks acumulados: 101
+Analisando frxGBPNZD - Último preço: 2.15737
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.4524357240252618,
+    volume: 1,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.7207307172075786,
+  finalConfidence: 0.7207307172075786
+}
+Sinal forte detectado para frxGBPNZD com confiança 1
+Processando dados para frxAUDNZD. Ticks acumulados: 101
+Analisando frxAUDNZD - Último preço: 1.10129
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.24196733308807145,
+    volume: 1,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.5725901999264215,
+  finalConfidence: 0.5725901999264215
+}
+Sinal forte detectado para frxAUDNZD com confiança 1
+Processando dados para frxUSDJPY. Ticks acumulados: 101
+Analisando frxUSDJPY - Último preço: 152.015
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.330674242006212,
+    volume: 0.47058823528270965,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.4933199196584055,
+  finalConfidence: 0.4933199196584055
+}
+Sinal forte detectado para frxUSDJPY com confiança 1
+Processando dados para frxAUDUSD. Ticks acumulados: 101
+Analisando frxAUDUSD - Último preço: 0.65768
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.3122292437550447,
+    volume: 0,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.43, indicators: 0.38, volume: 0, patterns: 0.19 },
+  rawConfidence: 0.5929804459602503,
+  finalConfidence: 0.5929804459602503
+}
+Confiança insuficiente para frxAUDUSD: 0
+Processando dados para frxUSDCAD. Ticks acumulados: 101
+Analisando frxUSDCAD - Último preço: 1.39124
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.31521289561868515,
+    volume: 0,
+    pattern: 0.25
+  },
+  weights: { trend: 0.43, indicators: 0.38, volume: 0, patterns: 0.19 },
+  rawConfidence: 0.48978090033510036,
+  finalConfidence: 0.48978090033510036
+}
+Confiança insuficiente para frxUSDCAD: 0.48978090033510036
+Processando dados para frxGBPUSD. Ticks acumulados: 101
+Analisando frxGBPUSD - Último preço: 1.28839
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.40977065340138663,
+    volume: 1,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.7104311960204159,
+  finalConfidence: 0.7104311960204159
+}
+Confiança insuficiente para frxGBPUSD: 0.7104311960204159
+Processando dados para frxUSDSEK. Ticks acumulados: 101
+Analisando frxUSDSEK - Último preço: 10.66133
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.4098891263823904,
+    volume: 0.15483870968055435,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.4539344798508279,
+  finalConfidence: 0.4539344798508279
+}
+Confiança insuficiente para frxUSDSEK: 0.4539344798508279
+Processando dados para frxNZDJPY. Ticks acumulados: 101
+Analisando frxNZDJPY - Último preço: 90.772
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.56854,
+    volume: 0.7619047618975439,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6229429523795087,
+  finalConfidence: 0.6229429523795087
+}
+Sinal forte detectado para frxNZDJPY com confiança 1
+Processando dados para frxEURCAD. Ticks acumulados: 101
+Analisando frxEURCAD - Último preço: 1.51246
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.5557381749364069,
+    volume: 0,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.43, indicators: 0.38, volume: 0, patterns: 0.19 },
+  rawConfidence: 0.578013839809168,
+  finalConfidence: 0.578013839809168
+}
+Confiança insuficiente para frxEURCAD: 0
+Processando dados para frxUSDMXN. Ticks acumulados: 101
+Analisando frxUSDMXN - Último preço: 20.0139
+Detalhes do cálculo de confiança: {
+  scores: { trend: 1, indicator: 0.6478, volume: 0, pattern: 0.25 },
+  weights: { trend: 0.43, indicators: 0.38, volume: 0, patterns: 0.19 },
+  rawConfidence: 0.723664,
+  finalConfidence: 0.723664
+}
+Confiança insuficiente para frxUSDMXN: 0
+Processando dados para frxGBPNZD. Ticks acumulados: 101
+Analisando frxGBPNZD - Último preço: 2.15736
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.38208399954068484,
+    volume: 0.7692307691992359,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6534713537020527,
+  finalConfidence: 0.6534713537020527
+}
+Confiança insuficiente para frxGBPNZD: 0.6534713537020527
+Processando dados para frxGBPJPY. Ticks acumulados: 101
+Analisando frxGBPJPY - Último preço: 195.851
+Detalhes do cálculo de confiança: {
+  scores: { trend: 1, indicator: 0.321794384614702, volume: 1, pattern: 0.25 },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6840383153844106,
+  finalConfidence: 0.6840383153844106
+}
+Sinal forte detectado para frxGBPJPY com confiança 1
+Processando dados para frxEURAUD. Ticks acumulados: 101
+Analisando frxEURAUD - Último preço: 1.65316
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.5005971969277592,
+    volume: 0,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.43, indicators: 0.38, volume: 0, patterns: 0.19 },
+  rawConfidence: 0.6645602681658818,
+  finalConfidence: 0.6645602681658818
+}
+Confiança insuficiente para frxEURAUD: 0
+Processando dados para frxAUDCHF. Ticks acumulados: 101
+Analisando frxAUDCHF - Último preço: 0.56815
+Detalhes do cálculo de confiança: {
+  scores: { trend: 1, indicator: 0.6123777556449784, volume: 1, pattern: 0.25 },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.7712133266934934,
+  finalConfidence: 0.7712133266934934
+}
+Sinal forte detectado para frxAUDCHF com confiança 0.7712133266934934
+Processando dados para frxUSDPLN. Ticks acumulados: 101
+Analisando frxUSDPLN - Último preço: 4.0055
+Detalhes do cálculo de confiança: {
+  scores: { trend: 0.75, indicator: 0.3530719222419429, volume: 1, pattern: 0 },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.5684215766725829,
+  finalConfidence: 0.5684215766725829
+}
+Sinal forte detectado para frxUSDPLN com confiança 1
+Processando dados para frxEURCAD. Ticks acumulados: 101
+Analisando frxEURCAD - Último preço: 1.51246
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.5032156559862501,
+    volume: 0,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.43, indicators: 0.38, volume: 0, patterns: 0.19 },
+  rawConfidence: 0.5580552826081084,
+  finalConfidence: 0.5580552826081084
+}
+Confiança insuficiente para frxEURCAD: 0
+Processando dados para frxNZDJPY. Ticks acumulados: 101
+Analisando frxNZDJPY - Último preço: 90.771
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.58708,
+    volume: 0.7619047619078555,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.628504952381571,
+  finalConfidence: 0.628504952381571
+}
+Sinal forte detectado para frxNZDJPY com confiança 1
+Processando dados para frxUSDSEK. Ticks acumulados: 101
+Analisando frxUSDSEK - Último preço: 10.66128
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.3825405578991722,
+    volume: 0.3225806451601812,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.4792782964017878,
+  finalConfidence: 0.4792782964017878
+}
+Confiança insuficiente para frxUSDSEK: 0.4792782964017878
+Processando dados para frxGBPUSD. Ticks acumulados: 101
+Analisando frxGBPUSD - Último preço: 1.28838
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.2975352925558368,
+    volume: 1,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.589260587766751,
+  finalConfidence: 0.589260587766751
+}
+Confiança insuficiente para frxGBPUSD: 0.5892605877536669
+Processando dados para frxAUDUSD. Ticks acumulados: 101
+Analisando frxAUDUSD - Último preço: 0.65767
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.20213970599702183,
+    volume: 1,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6456419117991066,
+  finalConfidence: 0.6456419117991066
+}
+Confiança insuficiente para frxAUDUSD: 0.6456419117991066
+Processando dados para frxUSDCAD. Ticks acumulados: 101
+Analisando frxUSDCAD - Último preço: 1.39125
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.19446814594348621,
+    volume: 1,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.5583404437830458,
+  finalConfidence: 0.5583404437830458
+}
+Sinal forte detectado para frxUSDCAD com confiança 1
+Processando dados para frxAUDNZD. Ticks acumulados: 101
+Analisando frxAUDNZD - Último preço: 1.1013
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.33488426277625893,
+    volume: 1,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6854652788328778,
+  finalConfidence: 0.6854652788328778
+}
+Confiança insuficiente para frxAUDNZD: 0.6854652788328778
+Processando dados para frxUSDJPY. Ticks acumulados: 101
+Analisando frxUSDJPY - Último preço: 152.013
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.31500734210794534,
+    volume: 1,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6820022026323836,
+  finalConfidence: 0.6820022026323836
+}
+Sinal forte detectado para frxUSDJPY com confiança 1
+Processando dados para frxEURGBP. Ticks acumulados: 101
+Analisando frxEURGBP - Último preço: 0.84389
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.5,
+    indicator: 0.3340812944800984,
+    volume: 1,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.5102243883440295,
+  finalConfidence: 0.5102243883440295
+}
+Confiança insuficiente para frxEURGBP: 0.5102243883440295
+Processando dados para frxUSDNOK. Ticks acumulados: 101
+Analisando frxUSDNOK - Último preço: 11.00027
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.352122321758805,
+    volume: 0.24427480916154745,
+    pattern: 0.25
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.541991658359951,
+  finalConfidence: 0.541991658359951
+}
+Confiança insuficiente para frxUSDNOK: 0.541991658359951
+Processando dados para frxAUDJPY. Ticks acumulados: 101
+Analisando frxAUDJPY - Último preço: 99.977
+Detalhes do cálculo de confiança: {
+  scores: { trend: 0.75, indicator: 0.60256, volume: 1, pattern: 0.25 },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6807679999999999,
+  finalConfidence: 0.6807679999999999
+}
+Sinal forte detectado para frxAUDJPY com confiança 1
+Processando dados para frxEURUSD. Ticks acumulados: 101
+Analisando frxEURUSD - Último preço: 1.08724
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.38748022035832586,
+    volume: 1,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.7012440661074978,
+  finalConfidence: 0.7012440661074978
+}
+Confiança insuficiente para frxEURUSD: 0.7012440661074978
+Processando dados para frxAUDCAD. Ticks acumulados: 101
+Analisando frxAUDCAD - Último preço: 0.91488
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.3094359808523891,
+    volume: 1,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.5903307942557167,
+  finalConfidence: 0.5903307942557167
+}
+Confiança insuficiente para frxAUDCAD: 0.2951653971262198
+Processando dados para frxGBPCHF. Ticks acumulados: 101
+Analisando frxGBPCHF - Último preço: 1.11301
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.30627349903538115,
+    volume: 1,
+    pattern: 0.225
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6756320497106143,
+  finalConfidence: 0.6756320497106143
+}
+Sinal forte detectado para frxGBPCHF com confiança 1
+Processando dados para frxEURJPY. Ticks acumulados: 101
+Analisando frxEURJPY - Último preço: 165.283
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 1,
+    indicator: 0.22547207934251207,
+    volume: 0,
+    pattern: 0.25
+  },
+  weights: { trend: 0.43, indicators: 0.38, volume: 0, patterns: 0.19 },
+  rawConfidence: 0.5631793901501546,
+  finalConfidence: 0.5631793901501546
+}
+Confiança insuficiente para frxEURJPY: 0.5631793901501546
+Processando dados para frxEURNZD. Ticks acumulados: 101
+Analisando frxEURNZD - Último preço: 1.82068
+Detalhes do cálculo de confiança: {
+  scores: { trend: 1, indicator: 0.6304, volume: 1, pattern: 0.2625 },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.778495,
+  finalConfidence: 0.778495
+}
+Sinal forte detectado para frxEURNZD com confiança 0.778495
+Processando dados para frxEURCHF. Ticks acumulados: 101
+Analisando frxEURCHF - Último preço: 0.93924
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.4871765077592083,
+    volume: 0,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.43, indicators: 0.38, volume: 0, patterns: 0.19 },
+  rawConfidence: 0.5519604062818325,
+  finalConfidence: 0.5519604062818325
+}
+Confiança insuficiente para frxEURCHF: 0.5519604062818325
+Processando dados para frxGBPAUD. Ticks acumulados: 101
+Analisando frxGBPAUD - Último preço: 1.95902
+Detalhes do cálculo de confiança: {
+  scores: {
+    trend: 0.75,
+    indicator: 0.5268952566193191,
+    volume: 1,
+    pattern: 0.2833333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6630685769857957,
+  finalConfidence: 0.6630685769857957
+}
+Confiança insuficiente para frxGBPAUD: 0.44204571798889447
+Processando dados para frxGBPCAD. Ticks acumulados: 101
+Analisando frxGBPCAD - Último preço: 1.79227
+Detalhes do cálculo de confiança: {
+  scores: {
+    indicator: 0.405655854710545,
+    volume: 1,
+    pattern: 0.2333333333333333
+  },
+  weights: { trend: 0.35, indicators: 0.3, volume: 0.2, patterns: 0.15 },
+  rawConfidence: 0.6191967564131634,
+  finalConfidence: 0.6191967564131634
+}
+Confiança insuficiente para frxGBPCAD: 0.6191967564131634
