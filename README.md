@@ -1,12 +1,12 @@
-# SignalOptionBinary
+# OptimusSafeTrade
 
 ## Descrição
 
-SignalOptionBinary é um projeto desenvolvido para fornecer previsões de mercado para opções binárias. Utiliza WebSockets do Deriv API para obter dados de preços em tempo real e realiza análises técnicas com indicadores como EMA, MACD, RSI e Bandas de Bollinger.
+OptimusSafeTrade é um projeto desenvolvido para fornecer previsões de mercado para opções binárias. Utiliza WebSockets do Deriv API para obter dados de preços em tempo real e realiza análises técnicas com indicadores como EMA, MACD, RSI e Bandas de Bollinger.
 
 ## Estrutura do Projeto
 
-/signaloptionbinary
+/optimussafetrade
 ├── client
 │ ├── indexPredictionsForex.html
 │ └── indexPredictionsVolacity.html
@@ -28,11 +28,11 @@ SignalOptionBinary é um projeto desenvolvido para fornecer previsões de mercad
 ## Instalação
 
 1. Clone este repositório:
-   git clone https://github.com/seu-usuario/signaloptionbinary.git
+   git clone https://github.com/seu-usuario/OptimusSafeTrade.git
    Navegue para o diretório do projeto:
 
 2. Navegue para o diretório do projeto:
-   cd signaloptionbinary
+   cd optimussafetrade
 
 3. Instale as dependências:
    npm install

@@ -1,46 +1,190 @@
 const tf = require("@tensorflow/tfjs");
 const technicalIndicators = require("technicalindicators");
-const path = require("path");
+const moment = require("moment");
 
 class MarketAnalyzer {
   constructor() {
-    this.model = null;
-    this.initialized = false;
-    this.dataStats = {
-      price: { min: null, max: null },
-      rsi: { min: 0, max: 100 },
-      macd: { min: null, max: null },
-      bollinger: { min: null, max: null },
-    };
-    this.historicalData = [];
+    this.initialize();
     this.minPrices = 30;
-    this.modelPath = path.join(__dirname, "../models/trading_model");
-    this.dataPath = path.join(__dirname, "../data/market_data.json");
-    this.lastTrainingTime = null;
-    this.trainingInterval = 1000 * 60 * 60; // 1 hora
-    this.resetInterval = 1000 * 60 * 60 * 24; // 24 horas
-    this.baselineModel = null;
     this.timeframes = {
-      M1: 60, // 1 minuto em segundos
+      M1: 60, // 1 minuto
       M5: 300, // 5 minutos
       M15: 900, // 15 minutos
       M30: 1800, // 30 minutos
     };
-    this.volumeHistory = [];
-    this.volumeWindow = 20; // Janela para média móvel do volume
-    this.trendMemory = new Map(); // Para armazenar tendências anteriores
+
+    // Configurações de análise
+    this.config = {
+      minConfidence: 0.95, // Confiança mínima para gerar sinal
+      volumeThreshold: 1.2, // Volume mínimo em relação à média
+      trendStrengthMin: 0.7, // Força mínima da tendência
+      rsiOverbought: 70, // Nível de sobrecompra
+      rsiOversold: 30, // Nível de sobrevenda
+      bollingerPeriod: 20, // Período das Bandas de Bollinger
+      bollingerStdDev: 2, // Desvio padrão das Bandas
+      macdFast: 12, // Período rápido do MACD
+      macdSlow: 26, // Período lento do MACD
+      macdSignal: 9, // Período do sinal do MACD
+      minimumTicks: 100, // Mínimo de ticks para análise
+    };
+
+    // Cache de análises
+    this.analysisCache = new Map();
+    this.cacheDuration = 30000; // 30 segundos
   }
-  // Função para calcular volume sintético já que não temos volume real
-  calculateVolume(prices) {
+
+  async initialize() {
     try {
-      if (!Array.isArray(prices) || prices.length < 2) {
-        return this.getDefaultVolumeData();
+      this.initialized = true;
+      console.log("MarketAnalyzer inicializado com sucesso");
+    } catch (error) {
+      console.error("Erro ao inicializar MarketAnalyzer:", error);
+      throw error;
+    }
+  }
+
+  async analyzeTrend(prices, additionalData = {}) {
+    try {
+      if (!Array.isArray(prices) || prices.length < this.config.minimumTicks) {
+        return {
+          direction: "neutral",
+          confidence: 0,
+          strength: 0,
+          details: null,
+        };
       }
 
+      // Verificar cache
+      const cacheKey = this.generateCacheKey(prices);
+      const cachedAnalysis = this.getFromCache(cacheKey);
+      if (cachedAnalysis) return cachedAnalysis;
+
+      // Análise técnica completa
+      const indicators = this.calculateIndicators(prices);
+      const volume = this.calculateVolume(prices);
+      const patterns = this.identifyPatterns(prices);
+      const trends = this.analyzeTrendsByTimeframe(prices);
+      const volatility = this.calculateVolatility(prices);
+      const momentum = this.calculateMomentum(prices, indicators);
+
+      // Análise principal
+      const analysis = this.combineAnalyses({
+        indicators,
+        volume,
+        patterns,
+        trends,
+        volatility,
+        momentum,
+        additionalData,
+      });
+
+      // Validação final
+      const validatedAnalysis = this.validateAnalysis(analysis);
+
+      // Atualizar cache
+      this.updateCache(cacheKey, validatedAnalysis);
+
+      return validatedAnalysis;
+    } catch (error) {
+      console.error("Erro na análise de tendência:", error);
+      return null;
+    }
+  }
+
+  calculateIndicators(prices) {
+    try {
+      const rsi = technicalIndicators.RSI.calculate({
+        values: prices,
+        period: 14,
+      });
+
+      const macd = technicalIndicators.MACD.calculate({
+        values: prices,
+        fastPeriod: this.config.macdFast,
+        slowPeriod: this.config.macdSlow,
+        signalPeriod: this.config.macdSignal,
+      });
+
+      const bollinger = technicalIndicators.BollingerBands.calculate({
+        values: prices,
+        period: this.config.bollingerPeriod,
+        stdDev: this.config.bollingerStdDev,
+      });
+
+      const ema20 = technicalIndicators.EMA.calculate({
+        values: prices,
+        period: 20,
+      });
+
+      const ema50 = technicalIndicators.EMA.calculate({
+        values: prices,
+        period: 50,
+      });
+
+      return {
+        rsi: this.normalizeIndicator(rsi),
+        macd: this.normalizeMACD(macd),
+        bollinger: this.normalizeBollinger(bollinger),
+        ema: {
+          ema20: this.normalizeIndicator(ema20),
+          ema50: this.normalizeIndicator(ema50),
+        },
+      };
+    } catch (error) {
+      console.error("Erro ao calcular indicadores:", error);
+      return null;
+    }
+  }
+
+  normalizeIndicator(indicator) {
+    if (!Array.isArray(indicator) || indicator.length === 0) return [];
+    const lastValues = indicator.slice(-5);
+    return {
+      current: lastValues[lastValues.length - 1],
+      previous: lastValues[lastValues.length - 2],
+      history: lastValues,
+      trend: this.calculateIndicatorTrend(lastValues),
+    };
+  }
+
+  calculateIndicatorTrend(values) {
+    if (values.length < 2) return "neutral";
+    const last = values[values.length - 1];
+    const previous = values[values.length - 2];
+    return last > previous ? "up" : last < previous ? "down" : "neutral";
+  }
+
+  normalizeMACD(macd) {
+    if (!Array.isArray(macd) || macd.length === 0) return null;
+    const lastMACD = macd[macd.length - 1];
+    return {
+      value: lastMACD.MACD,
+      signal: lastMACD.signal,
+      histogram: lastMACD.histogram,
+      trend: lastMACD.MACD > lastMACD.signal ? "up" : "down",
+      strength: Math.abs(lastMACD.MACD - lastMACD.signal),
+    };
+  }
+
+  normalizeBollinger(bollinger) {
+    if (!Array.isArray(bollinger) || bollinger.length === 0) return null;
+    const last = bollinger[bollinger.length - 1];
+    return {
+      upper: last.upper,
+      middle: last.middle,
+      lower: last.lower,
+      bandwidth: (last.upper - last.lower) / last.middle,
+      percentB: (last.close - last.lower) / (last.upper - last.lower),
+    };
+  }
+  calculateVolume(prices) {
+    try {
+      if (prices.length < 2) return null;
+
+      // Cálculo de volume sintético baseado em variação de preços
       const volumes = [];
       let avgChange = 0;
 
-      // Calcular mudança média de preço
       for (let i = 1; i < prices.length; i++) {
         const change = Math.abs(prices[i] - prices[i - 1]);
         avgChange += change;
@@ -51,1004 +195,91 @@ class MarketAnalyzer {
       for (let i = 1; i < prices.length; i++) {
         const change = Math.abs(prices[i] - prices[i - 1]);
         const volatilityFactor = change / avgChange;
-        const syntheticVolume = 1000000 * volatilityFactor;
-        volumes.push(syntheticVolume);
+        volumes.push(1000000 * volatilityFactor); // Volume base * fator de volatilidade
       }
 
-      // Normalizar e calcular médias
-      const maxVolume = Math.max(...volumes);
-      const normalizedVolumes = volumes.map((v) => v / maxVolume);
-      const vwap = this.calculateVWAP(prices, normalizedVolumes);
-      const volumeMA = this.calculateVolumeMA(normalizedVolumes);
+      const recentVolumes = volumes.slice(-20);
+      const averageVolume =
+        recentVolumes.reduce((a, b) => a + b, 0) / recentVolumes.length;
+      const currentVolume = volumes[volumes.length - 1];
 
       return {
-        current: normalizedVolumes[normalizedVolumes.length - 1],
-        history: normalizedVolumes,
-        average: volumeMA,
-        vwap: vwap,
-        trend: this.analyzeVolumeTrend(normalizedVolumes),
+        current: currentVolume,
+        average: averageVolume,
+        ratio: currentVolume / averageVolume,
+        trend: this.analyzeVolumeTrend(recentVolumes),
+        isStrong: currentVolume > averageVolume * this.config.volumeThreshold,
       };
     } catch (error) {
       console.error("Erro ao calcular volume:", error);
-      return this.getDefaultVolumeData();
+      return null;
     }
   }
-  getDefaultVolumeData() {
-    return {
-      current: 1,
-      history: [],
-      average: 1,
-      vwap: 1,
-      trend: "neutral",
-    };
-  }
 
-  // Calcular VWAP (Volume Weighted Average Price)
-  calculateVWAP(prices, volumes) {
-    let sumPV = 0;
-    let sumV = 0;
-
-    for (let i = 0; i < prices.length; i++) {
-      sumPV += prices[i] * volumes[i];
-      sumV += volumes[i];
-    }
-
-    return sumV === 0 ? prices[prices.length - 1] : sumPV / sumV;
-  }
-
-  // Calcular Média Móvel do Volume
-  calculateVolumeMA(volumes) {
-    if (volumes.length < this.volumeWindow) {
-      return volumes.reduce((a, b) => a + b, 0) / volumes.length;
-    }
-
-    const recentVolumes = volumes.slice(-this.volumeWindow);
-    return recentVolumes.reduce((a, b) => a + b, 0) / this.volumeWindow;
-  }
-
-  // Analisar tendência do volume
   analyzeVolumeTrend(volumes) {
-    if (volumes.length < 2) return "neutral";
-
-    const recentVolumes = volumes.slice(-5);
-    const volumeChange =
-      (recentVolumes[recentVolumes.length - 1] - recentVolumes[0]) /
-      recentVolumes[0];
-
-    if (volumeChange > 0.1) return "increasing";
-    if (volumeChange < -0.1) return "decreasing";
+    const recentChange =
+      (volumes[volumes.length - 1] - volumes[0]) / volumes[0];
+    if (recentChange > 0.1) return "increasing";
+    if (recentChange < -0.1) return "decreasing";
     return "stable";
   }
 
-  // Verificar divergências de volume
-  checkVolumeDivergence(prices, volumes) {
-    const priceChange = (prices[prices.length - 1] - prices[0]) / prices[0];
-    const volumeChange =
-      (volumes[volumes.length - 1] - volumes[0]) / volumes[0];
+  analyzeTrendsByTimeframe(prices) {
+    try {
+      const trends = {};
+      const timeframes = [5, 15, 30, 60]; // Períodos em minutos
 
-    // Divergência positiva: preço cai mas volume aumenta
-    if (priceChange < 0 && volumeChange > 0) {
-      return { type: "positive", strength: Math.abs(volumeChange) };
+      timeframes.forEach((period) => {
+        const periodPrices = prices.slice(-period);
+        trends[`M${period}`] = this.analyzeSingleTimeframe(periodPrices);
+      });
+
+      return {
+        trends,
+        alignment: this.checkTrendAlignment(trends),
+        strength: this.calculateTrendStrength(trends),
+      };
+    } catch (error) {
+      console.error("Erro na análise de timeframes:", error);
+      return null;
     }
-
-    // Divergência negativa: preço sobe mas volume diminui
-    if (priceChange > 0 && volumeChange < 0) {
-      return { type: "negative", strength: Math.abs(volumeChange) };
-    }
-
-    return { type: "none", strength: 0 };
   }
 
-  analyzePriceAction(prices) {
-    if (!Array.isArray(prices)) {
-      console.warn("Dados de preços inválidos em analyzePriceAction");
-      return { swings: [], support: [], resistance: [], prices: [] };
-    }
+  analyzeSingleTimeframe(prices) {
+    if (prices.length < 2) return { direction: "neutral", strength: 0 };
 
-    const swings = this.identifySwings(prices);
-    const support = this.findSupportLevels(prices);
-    const resistance = this.findResistanceLevels(prices);
+    const first = prices[0];
+    const last = prices[prices.length - 1];
+    const highLow = this.calculateHighLow(prices);
+    const linearRegression = this.calculateLinearRegression(prices);
 
     return {
-      swings,
-      support,
-      resistance,
-      prices, // Incluir os preços no retorno
-    };
-  }
-  identifySwings(prices) {
-    const swings = [];
-    for (let i = 2; i < prices.length - 2; i++) {
-      // Identifica topos e fundos
-      if (prices[i] > prices[i - 1] && prices[i] > prices[i + 1]) {
-        swings.push({ type: "high", price: prices[i], index: i });
-      }
-      if (prices[i] < prices[i - 1] && prices[i] < prices[i + 1]) {
-        swings.push({ type: "low", price: prices[i], index: i });
-      }
-    }
-    return swings;
-  }
-
-  findSupportLevels(prices) {
-    const levels = [];
-    const tolerance = 0.0001; // 0.01%
-
-    for (let i = 0; i < prices.length; i++) {
-      let touchCount = 0;
-      for (let j = i + 1; j < prices.length; j++) {
-        if (Math.abs(prices[j] - prices[i]) / prices[i] < tolerance) {
-          touchCount++;
-        }
-      }
-      if (touchCount >= 2) {
-        levels.push(prices[i]);
-      }
-    }
-    return [...new Set(levels)]; // Remove duplicatas
-  }
-
-  findResistanceLevels(prices) {
-    // Similar ao support, mas procurando níveis superiores
-    return this.findSupportLevels(prices.slice().reverse());
-  }
-  async initialize() {
-    try {
-      // Criar modelo base
-      this.baselineModel = await this.createModel();
-      await this.trainInitialModel(this.baselineModel); // Passar o modelo como parâmetro
-
-      // Criar modelo ativo
-      this.model = await this.createModel();
-      await this.trainInitialModel(this.model); // Passar o modelo como parâmetro
-
-      this.initialized = true;
-      this.startPeriodicReset();
-      console.log("MarketAnalyzer inicializado com sucesso");
-    } catch (error) {
-      console.error("Erro ao inicializar MarketAnalyzer:", error);
-      throw error;
-    }
-  }
-
-  async createModel() {
-    try {
-      const model = tf.sequential();
-
-      // Input layer
-      model.add(
-        tf.layers.dense({
-          units: 64,
-          activation: "relu",
-          inputShape: [5],
-          kernelInitializer: "glorotNormal",
-        })
-      );
-
-      // Hidden layer
-      model.add(
-        tf.layers.dense({
-          units: 32,
-          activation: "relu",
-          kernelInitializer: "glorotNormal",
-        })
-      );
-
-      // Dropout layer
-      model.add(tf.layers.dropout({ rate: 0.2 }));
-
-      // Output layer
-      model.add(
-        tf.layers.dense({
-          units: 1,
-          activation: "sigmoid",
-          kernelInitializer: "glorotNormal",
-        })
-      );
-
-      const optimizer = tf.train.adam(0.001);
-
-      model.compile({
-        optimizer: optimizer,
-        loss: "binaryCrossentropy",
-        metrics: ["accuracy"],
-      });
-
-      return model;
-    } catch (error) {
-      console.error("Erro ao criar modelo:", error);
-      throw error;
-    }
-  }
-
-  startPeriodicReset() {
-    setInterval(async () => {
-      await this.evaluateAndResetIfNeeded();
-    }, this.resetInterval);
-  }
-
-  async evaluateAndResetIfNeeded() {
-    try {
-      // Avaliar performance do modelo atual
-      const currentPerformance = await this.evaluateModel(this.model);
-      const baselinePerformance = await this.evaluateModel(this.baselineModel);
-
-      console.log("Performance:", {
-        current: currentPerformance,
-        baseline: baselinePerformance,
-      });
-
-      // Se o modelo atual estiver performando pior que o baseline
-      if (currentPerformance < baselinePerformance * 0.95) {
-        // 5% de tolerância
-        console.log("Resetando modelo para baseline...");
-        await this.resetToBaseline();
-      } else {
-        // Atualizar baseline se o modelo atual estiver significativamente melhor
-        if (currentPerformance > baselinePerformance * 1.1) {
-          // 10% de melhoria
-          console.log("Atualizando modelo baseline...");
-          this.baselineModel = await this.cloneModel(this.model);
-        }
-      }
-    } catch (error) {
-      console.error("Erro na avaliação do modelo:", error);
-    }
-  }
-
-  cleanupMemory() {
-    try {
-      // Limpar variáveis de tensor não utilizadas
-      tf.disposeVariables();
-
-      // Executar coleta de lixo
-      if (global.gc) {
-        global.gc();
-      }
-    } catch (error) {
-      console.error("Erro ao limpar memória:", error);
-    }
-  }
-
-  async evaluateModel(model) {
-    let tensorFeatures = null;
-    let tensorLabels = null;
-
-    try {
-      const testData = this.historicalData.slice(-1000);
-      const indicators = this.calculateIndicators(testData);
-      const features = this.prepareFeatures(testData, indicators);
-
-      const labels = [];
-      for (let i = 5; i < testData.length; i++) {
-        labels.push(testData[i] > testData[i - 1] ? 1 : 0);
-      }
-
-      tensorFeatures = tf.tensor2d(features);
-      tensorLabels = tf.tensor1d(labels);
-
-      const result = await model.evaluate(tensorFeatures, tensorLabels);
-      const accuracy = await result[1].data();
-
-      return accuracy[0];
-    } catch (error) {
-      console.error("Erro na avaliação:", error);
-      return 0;
-    } finally {
-      // Limpar memória
-      if (tensorFeatures) tensorFeatures.dispose();
-      if (tensorLabels) tensorLabels.dispose();
-    }
-  }
-
-  async resetToBaseline() {
-    this.model = await this.cloneModel(this.baselineModel);
-    this.lastTrainingTime = Date.now();
-    console.log("Modelo resetado para baseline");
-  }
-
-  async cloneModel(sourceModel) {
-    const clonedModel = await this.createModel();
-    const weights = sourceModel.getWeights();
-    clonedModel.setWeights(weights);
-    return clonedModel;
-  }
-
-  async processNewData(price) {
-    try {
-      if (!this.initialized) {
-        console.log("MarketAnalyzer ainda não inicializado");
-        return;
-      }
-
-      if (typeof price !== "number" || isNaN(price)) {
-        console.error("Preço inválido recebido:", price);
-        return;
-      }
-
-      this.historicalData.push(price);
-
-      if (this.historicalData.length > 10000) {
-        this.historicalData.shift();
-      }
-
-      const timeSinceLastTraining = Date.now() - (this.lastTrainingTime || 0);
-      if (timeSinceLastTraining > this.trainingInterval) {
-        console.log("Iniciando treinamento periódico...");
-        await this.trainWithHistoricalData();
-        this.lastTrainingTime = Date.now();
-        this.cleanupMemory();
-      }
-    } catch (error) {
-      console.error("Erro ao processar novos dados:", error);
-    }
-  }
-  async trainWithHistoricalData() {
-    try {
-      if (!this.model) {
-        throw new Error("Modelo não inicializado");
-      }
-
-      if (this.historicalData.length < this.minPrices) {
-        console.log("Dados históricos insuficientes para treinamento");
-        return;
-      }
-
-      const batchSize = Math.min(1000, this.historicalData.length);
-      const recentData = this.historicalData.slice(-batchSize);
-
-      const indicators = this.calculateIndicators(recentData);
-      const features = this.prepareFeatures(recentData, indicators);
-
-      const labels = [];
-      for (let i = 5; i < recentData.length; i++) {
-        labels.push(recentData[i] > recentData[i - 1] ? 1 : 0);
-      }
-
-      const tensorFeatures = tf.tensor2d(features);
-      const tensorLabels = tf.tensor1d(labels);
-
-      const trainLogs = await this.model.fit(tensorFeatures, tensorLabels, {
-        epochs: 10,
-        batchSize: 32,
-        shuffle: true,
-        verbose: 1,
-        callbacks: {
-          onEpochEnd: async (epoch, logs) => {
-            console.log(
-              `Treinamento contínuo - Epoch ${epoch}: loss = ${logs.loss.toFixed(
-                4
-              )}, accuracy = ${logs.acc.toFixed(4)}`
-            );
-          },
-        },
-      });
-
-      // Limpar memória
-      tf.dispose([tensorFeatures, tensorLabels]);
-
-      console.log("Treinamento com dados históricos concluído");
-      return trainLogs;
-    } catch (error) {
-      console.error("Erro no treinamento com dados históricos:", error);
-      throw error;
-    }
-  }
-
-  normalizeData(data, min = null, max = null) {
-    if (min === null) min = Math.min(...data);
-    if (max === null) max = Math.max(...data);
-    if (max === min) return data.map(() => 0.5);
-    return data.map((x) => (x - min) / (max - min));
-  }
-
-  updateDataStats(prices, indicators) {
-    this.dataStats.price.min = Math.min(...prices);
-    this.dataStats.price.max = Math.max(...prices);
-
-    const macdValues = indicators.macd
-      .map((m) => m.MACD)
-      .filter((m) => m !== undefined);
-    this.dataStats.macd.min = Math.min(...macdValues);
-    this.dataStats.macd.max = Math.max(...macdValues);
-
-    const bollingerRanges = indicators.bollinger.map((b) => b.upper - b.lower);
-    this.dataStats.bollinger.min = Math.min(...bollingerRanges);
-    this.dataStats.bollinger.max = Math.max(...bollingerRanges);
-  }
-
-  generateSyntheticData() {
-    const data = [];
-    let price = 100;
-
-    for (let i = 0; i < 1000; i++) {
-      const trend = Math.random() > 0.5 ? 1 : -1;
-      const change = Math.random() * 0.002 * trend;
-      price = price * (1 + change);
-      data.push(price);
-    }
-
-    return data;
-  }
-
-  async trainInitialModel(model) {
-    try {
-      if (!model) {
-        throw new Error("Modelo não fornecido para treinamento inicial");
-      }
-
-      const syntheticData = this.generateSyntheticData();
-      const indicators = this.calculateIndicators(syntheticData);
-      const features = this.prepareFeatures(syntheticData, indicators);
-
-      const labels = [];
-      for (let i = 5; i < syntheticData.length; i++) {
-        labels.push(syntheticData[i] > syntheticData[i - 1] ? 1 : 0);
-      }
-
-      const tensorFeatures = tf.tensor2d(features);
-      const tensorLabels = tf.tensor1d(labels);
-
-      const trainLogs = await model.fit(tensorFeatures, tensorLabels, {
-        epochs: 50,
-        batchSize: 32,
-        shuffle: true,
-        verbose: 1,
-        validationSplit: 0.2,
-        callbacks: {
-          onEpochEnd: async (epoch, logs) => {
-            if (epoch % 10 === 0) {
-              console.log(
-                `Epoch ${epoch}: loss = ${logs.loss.toFixed(
-                  4
-                )}, accuracy = ${logs.acc.toFixed(4)}`
-              );
-            }
-          },
-        },
-      });
-
-      // Limpar memória
-      tf.dispose([tensorFeatures, tensorLabels]);
-
-      console.log("Modelo treinado com dados sintéticos");
-      return trainLogs;
-    } catch (error) {
-      console.error("Erro no treinamento inicial:", error);
-      throw error;
-    }
-  }
-
-  prepareFeatures(prices, indicators) {
-    const window = 5;
-    const features = [];
-
-    this.updateDataStats(prices, indicators);
-
-    for (let i = window; i < prices.length; i++) {
-      const slice = prices.slice(i - window, i);
-      const returns = slice.map((p, j) =>
-        j > 0 ? (p - slice[j - 1]) / slice[j - 1] : 0
-      );
-
-      const normalizedReturns = this.normalizeData(returns);
-      const normalizedRSI = indicators.rsi[i] / 100;
-      const normalizedMACD = this.normalizeData(
-        [indicators.macd[i]?.MACD || 0],
-        this.dataStats.macd.min,
-        this.dataStats.macd.max
-      )[0];
-
-      const bollingerWidth =
-        indicators.bollinger[i]?.upper - indicators.bollinger[i]?.lower || 0;
-      const normalizedBollinger = this.normalizeData(
-        [bollingerWidth],
-        this.dataStats.bollinger.min,
-        this.dataStats.bollinger.max
-      )[0];
-
-      features.push([
-        normalizedReturns[normalizedReturns.length - 1],
-        normalizedRSI,
-        normalizedMACD,
-        normalizedBollinger,
-        (prices[i] - this.dataStats.price.min) /
-          (this.dataStats.price.max - this.dataStats.price.min),
-      ]);
-    }
-
-    return features;
-  }
-
-  calculateIndicators(prices) {
-    const period = 14;
-
-    const rsi = technicalIndicators.RSI.calculate({
-      values: prices,
-      period: period,
-    });
-
-    const macd = technicalIndicators.MACD.calculate({
-      values: prices,
-      fastPeriod: 12,
-      slowPeriod: 26,
-      signalPeriod: 9,
-    });
-
-    const bollinger = technicalIndicators.BollingerBands.calculate({
-      values: prices,
-      period: period,
-      stdDev: 2,
-    });
-
-    while (rsi.length < prices.length) rsi.unshift(50);
-    while (macd.length < prices.length)
-      macd.unshift({ MACD: 0, signal: 0, histogram: 0 });
-    while (bollinger.length < prices.length) {
-      bollinger.unshift({
-        middle: prices[0],
-        upper: prices[0],
-        lower: prices[0],
-      });
-    }
-
-    return { rsi, macd, bollinger };
-  }
-
-  // Modificar a função de análise de tendência principal
-  async analyzeTrend(prices) {
-    try {
-      if (prices.length < this.minPrices) {
-        return { direction: "neutral", strength: 0, confidence: 0 };
-      }
-
-      const indicators = this.calculateIndicators(prices);
-      const volumes = this.calculateVolume(prices);
-      const priceAction = this.analyzePriceAction(prices);
-
-      // Verificar divergências de volume
-      const volumeDivergence = this.checkVolumeDivergence(
+      direction: this.determineTrendDirection(
+        first,
+        last,
+        linearRegression.slope
+      ),
+      strength: this.calculateSingleTrendStrength(
         prices,
-        volumes.history
-      );
-
-      // Análise multi-timeframe
-      const trends = {
-        short: this.analyzeTrendByTimeframe(
-          prices.slice(-30),
-          indicators,
-          volumes
-        ),
-        medium: this.analyzeTrendByTimeframe(
-          prices.slice(-60),
-          indicators,
-          volumes
-        ),
-        long: this.analyzeTrendByTimeframe(prices, indicators, volumes),
-      };
-
-      // Confirmação de tendência com volume
-      const trendConfirmation = this.confirmTrendWithVolume(
-        trends,
-        priceAction,
-        volumes
-      );
-
-      // Cálculo de força e confiança considerando volume
-      const strength = this.calculateTrendStrength(trends, indicators, volumes);
-      const confidence = this.calculateConfidence(
-        trends,
-        indicators,
-        priceAction,
-        volumes
-      );
-
-      // Ajustar confiança baseado em divergências de volume
-      const adjustedConfidence = this.adjustConfidenceForVolume(
-        confidence,
-        volumeDivergence
-      );
-
-      return {
-        direction: trendConfirmation.direction,
-        strength: strength,
-        confidence: adjustedConfidence,
-        details: {
-          ...indicators,
-          volume: volumes,
-          priceAction,
-          volumeDivergence,
-          trends,
-        },
-      };
-    } catch (error) {
-      console.error("Erro na análise de tendência:", error);
-      return { direction: "neutral", strength: 0, confidence: 0 };
-    }
-  }
-  calculateReversalProbability(trend, indicators, priceAction, divergences) {
-    try {
-      let probability = 0;
-
-      // Verificar condições de reversão
-      if (divergences.length > 0) probability += 0.3;
-
-      // Verificar níveis importantes
-      const currentPrice =
-        priceAction.swings[priceAction.swings.length - 1]?.price;
-      const nearSupport = this.isNearLevel(currentPrice, priceAction.support);
-      const nearResistance = this.isNearLevel(
-        currentPrice,
-        priceAction.resistance
-      );
-
-      if (trend.direction === "up" && nearResistance) probability += 0.3;
-      if (trend.direction === "down" && nearSupport) probability += 0.3;
-
-      // Verificar sobrecompra/sobrevenda
-      const rsi = indicators.rsi[indicators.rsi.length - 1];
-      if (trend.direction === "up" && rsi > 70) probability += 0.2;
-      if (trend.direction === "down" && rsi < 30) probability += 0.2;
-
-      return Math.min(probability, 1);
-    } catch (error) {
-      console.error("Erro ao calcular probabilidade de reversão:", error);
-      return 0;
-    }
+        highLow,
+        linearRegression
+      ),
+      regression: linearRegression,
+    };
   }
 
-  checkDivergences(prices, indicators) {
-    const divergences = [];
-
-    // Regular Divergences
-    const regularBullish = this.isRegularBullishDivergence(
-      prices,
-      indicators.rsi
-    );
-    const regularBearish = this.isRegularBearishDivergence(
-      prices,
-      indicators.rsi
-    );
-
-    // Hidden Divergences
-    const hiddenBullish = this.isHiddenBullishDivergence(
-      prices,
-      indicators.rsi
-    );
-    const hiddenBearish = this.isHiddenBearishDivergence(
-      prices,
-      indicators.rsi
-    );
-
-    if (regularBullish)
-      divergences.push({ type: "regular", direction: "bullish" });
-    if (regularBearish)
-      divergences.push({ type: "regular", direction: "bearish" });
-    if (hiddenBullish)
-      divergences.push({ type: "hidden", direction: "bullish" });
-    if (hiddenBearish)
-      divergences.push({ type: "hidden", direction: "bearish" });
-
-    return divergences;
+  calculateHighLow(prices) {
+    const high = Math.max(...prices);
+    const low = Math.min(...prices);
+    return { high, low, range: high - low };
   }
 
-  isNearKeyLevel(price, historicalData) {
-    const tolerance = 0.0005; // 0.05%
-    const levels = this.identifyKeyLevels(historicalData);
-
-    const isNearSupport = levels.support.some(
-      (level) => Math.abs(price - level) / level < tolerance
-    );
-
-    const isNearResistance = levels.resistance.some(
-      (level) => Math.abs(price - level) / level < tolerance
-    );
-
-    return isNearSupport || isNearResistance;
-  }
-
-  calculateSlope(values) {
-    if (values.length < 2) return 0;
-
-    const n = values.length;
+  calculateLinearRegression(prices) {
     let sumX = 0;
     let sumY = 0;
     let sumXY = 0;
     let sumXX = 0;
-
-    for (let i = 0; i < n; i++) {
-      sumX += i;
-      sumY += values[i];
-      sumXY += i * values[i];
-      sumXX += i * i;
-    }
-
-    return (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-  }
-
-  calculateConfidence(trends, indicators, priceAction, volumes) {
-    try {
-      // Pesos base
-      let weights = {
-        trend: 0.35,
-        indicators: 0.3,
-        volume: 0.2,
-        patterns: 0.15,
-      };
-
-      // Scores individuais
-      const trendScore = this.analyzeTrendConsistency(trends, indicators);
-      const indicatorScore = this.calculateIndicatorStrength(indicators);
-      let volumeScore = 0;
-      let patternScore = 0;
-
-      // Ajuste de pesos se volume estiver ausente
-      if (!volumes?.current) {
-        const volumeWeight = weights.volume;
-        weights.trend += volumeWeight * 0.4;
-        weights.indicators += volumeWeight * 0.4;
-        weights.patterns += volumeWeight * 0.2;
-        weights.volume = 0;
-      } else {
-        volumeScore = this.calculateVolumeStrength(volumes);
-      }
-
-      // Cálculo de padrões
-      if (priceAction?.swings) {
-        patternScore = this.calculatePatternStrength(
-          this.identifyPatterns(priceAction.prices, priceAction.swings)
-        );
-      }
-
-      // Cálculo ponderado
-      const confidence =
-        trendScore * weights.trend +
-        indicatorScore * weights.indicators +
-        volumeScore * weights.volume +
-        patternScore * weights.patterns;
-
-      // Normalização com limite máximo de 0.95
-      const finalConfidence = Math.min(Math.max(confidence, 0), 0.95);
-
-      // Log detalhado
-      console.log("Detalhes do cálculo de confiança:", {
-        scores: {
-          trend: trendScore,
-          indicator: indicatorScore,
-          volume: volumeScore,
-          pattern: patternScore,
-        },
-        weights,
-        rawConfidence: confidence,
-        finalConfidence,
-      });
-
-      return finalConfidence;
-    } catch (error) {
-      console.error("Erro no cálculo de confiança:", error);
-      return 0;
-    }
-  }
-
-  // 3. Ajuste no cálculo de força dos padrões
-  calculatePatternStrength(patterns) {
-    if (!patterns) return 0;
-
-    let strength = 0;
-    let patternCount = 0;
-
-    // Pontuação mais equilibrada para cada padrão
-    if (patterns.doubleTop) {
-      strength += 0.25;
-      patternCount++;
-    }
-    if (patterns.doubleBottom) {
-      strength += 0.25;
-      patternCount++;
-    }
-    if (patterns.headAndShoulders) {
-      strength += 0.35;
-      patternCount++;
-    }
-    if (patterns.triangles.ascending || patterns.triangles.descending) {
-      strength += 0.2;
-      patternCount++;
-    }
-
-    // Ajuste baseado na quantidade de padrões
-    return patternCount > 0 ? strength / patternCount : 0;
-  }
-
-  // Funções auxiliares adicionais
-  isHiddenBullishDivergence(prices, rsi) {
-    const priceLen = prices.length;
-    const rsiLen = rsi.length;
-    if (priceLen < 2 || rsiLen < 2) return false;
-
-    const priceLow1 = prices[priceLen - 1];
-    const priceLow2 = prices[priceLen - 2];
-    const rsiLow1 = rsi[rsiLen - 1];
-    const rsiLow2 = rsi[rsiLen - 2];
-
-    return priceLow1 > priceLow2 && rsiLow1 < rsiLow2;
-  }
-
-  isHiddenBearishDivergence(prices, rsi) {
-    const priceLen = prices.length;
-    const rsiLen = rsi.length;
-    if (priceLen < 2 || rsiLen < 2) return false;
-
-    const priceHigh1 = prices[priceLen - 1];
-    const priceHigh2 = prices[priceLen - 2];
-    const rsiHigh1 = rsi[rsiLen - 1];
-    const rsiHigh2 = rsi[rsiLen - 2];
-
-    return priceHigh1 < priceHigh2 && rsiHigh1 > rsiHigh2;
-  }
-
-  isNearLevel(price, levels, tolerance = 0.0005) {
-    return levels.some((level) => Math.abs(price - level) / level < tolerance);
-  }
-  analyzeTrendByTimeframe(prices, indicators, volumes) {
-    try {
-      // Verificar dados mínimos
-      if (prices.length < this.minPrices) {
-        return {
-          direction: "neutral",
-          strength: 0,
-          confidence: 0,
-        };
-      }
-
-      // Análise de tendência por preço
-      const priceTrend = this.analyzePriceTrend(prices);
-
-      // Análise de indicadores técnicos
-      const indicatorTrend = this.analyzeIndicatorTrend(indicators);
-
-      // Análise de estrutura de preço
-      const structureTrend = this.analyzeStructure(prices);
-
-      // Análise de momentum
-      const momentum = this.analyzeMomentum(prices, indicators);
-
-      // Combinar análises
-      const combinedAnalysis = this.combineAnalyses(
-        priceTrend,
-        indicatorTrend,
-        structureTrend,
-        momentum,
-        volumes
-      );
-
-      return combinedAnalysis;
-    } catch (error) {
-      console.error("Erro na análise de timeframe:", error);
-      return {
-        direction: "neutral",
-        strength: 0,
-        confidence: 0,
-      };
-    }
-  }
-  analyzePriceTrend(prices) {
-    try {
-      const periods = [5, 10, 20]; // Diferentes períodos para análise
-      const trends = periods.map((period) => {
-        const slice = prices.slice(-period);
-        const first = slice[0];
-        const last = slice[slice.length - 1];
-        const change = (last - first) / first;
-
-        // Calcular tendência linear
-        const linearTrend = this.calculateLinearTrend(slice);
-
-        return {
-          period,
-          direction: change > 0 ? "up" : change < 0 ? "down" : "neutral",
-          strength: Math.abs(change),
-          slope: linearTrend.slope,
-        };
-      });
-
-      // Combinar resultados dos diferentes períodos
-      const direction = this.getMajorityDirection(
-        trends.map((t) => t.direction)
-      );
-      const strength =
-        trends.reduce((acc, t) => acc + t.strength, 0) / trends.length;
-      const consistency = this.checkTrendConsistency(trends);
-
-      return {
-        direction,
-        strength,
-        consistency,
-        details: trends,
-      };
-    } catch (error) {
-      console.error("Erro na análise de tendência de preço:", error);
-      return { direction: "neutral", strength: 0, consistency: 0 };
-    }
-  }
-
-  analyzeIndicatorTrend(indicators) {
-    const { rsi, macd, bollinger } = indicators;
-
-    // Análise RSI
-    const rsiTrend = this.analyzeRSITrend(rsi);
-
-    // Análise MACD
-    const macdTrend = this.analyzeMACDTrend(macd);
-
-    // Análise Bollinger
-    const bollingerTrend = this.analyzeBollingerTrend(bollinger);
-
-    // Combinar sinais
-    const direction = this.getMajorityDirection([
-      rsiTrend.direction,
-      macdTrend.direction,
-      bollingerTrend.direction,
-    ]);
-
-    const strength =
-      (rsiTrend.strength + macdTrend.strength + bollingerTrend.strength) / 3;
-
-    return {
-      direction,
-      strength,
-      details: {
-        rsi: rsiTrend,
-        macd: macdTrend,
-        bollinger: bollingerTrend,
-      },
-    };
-  }
-
-  analyzeStructure(prices) {
-    // Identificar topos e fundos
-    const swings = this.identifySwings(prices);
-
-    // Analisar padrões de preço
-    const patterns = this.identifyPatterns(prices, swings);
-
-    // Identificar níveis importantes
-    const levels = this.identifyKeyLevels(prices, swings);
-
-    // Determinar estrutura geral
-    return this.determineStructure(swings, patterns, levels);
-  }
-
-  analyzeMomentum(prices, indicators) {
-    const recentPrices = prices.slice(-20);
-    const rsi = indicators.rsi.slice(-20);
-    const macd = indicators.macd.slice(-20);
-
-    // Calcular força do momentum
-    const momentumStrength = this.calculateMomentumStrength(
-      recentPrices,
-      rsi,
-      macd
-    );
-
-    // Verificar divergências
-    const divergences = this.checkMomentumDivergences(recentPrices, rsi, macd);
-
-    // Analisar aceleração
-    const acceleration = this.calculateAcceleration(recentPrices);
-
-    return {
-      strength: momentumStrength,
-      divergences,
-      acceleration,
-    };
-  }
-
-  calculateLinearTrend(prices) {
     const n = prices.length;
-    let sumX = 0;
-    let sumY = 0;
-    let sumXY = 0;
-    let sumXX = 0;
 
     for (let i = 0; i < n; i++) {
       sumX += i;
@@ -1059,1191 +290,2204 @@ class MarketAnalyzer {
 
     const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
     const intercept = (sumY - slope * sumX) / n;
+    const rSquared = this.calculateRSquared(prices, slope, intercept);
 
-    return { slope, intercept };
+    return { slope, intercept, rSquared };
   }
 
-  getMajorityDirection(directions) {
-    try {
-      if (!Array.isArray(directions) || directions.length === 0) {
-        return "neutral";
-      }
+  calculateRSquared(prices, slope, intercept) {
+    const mean = prices.reduce((a, b) => a + b) / prices.length;
+    let totalSS = 0;
+    let residualSS = 0;
 
-      const counts = directions.reduce((acc, dir) => {
-        if (dir) {
-          // Verificar se a direção não é undefined ou null
-          acc[dir] = (acc[dir] || 0) + 1;
-        }
-        return acc;
-      }, {});
-
-      if (Object.keys(counts).length === 0) {
-        return "neutral";
-      }
-
-      return Object.entries(counts).reduce((a, b) => (a[1] > b[1] ? a : b))[0];
-    } catch (error) {
-      console.error("Erro ao calcular direção majoritária:", error);
-      return "neutral";
-    }
-  }
-
-  checkTrendConsistency(trends) {
-    const directions = trends.map((t) => t.direction);
-    const mainDirection = this.getMajorityDirection(directions);
-    const consistentCount = directions.filter(
-      (d) => d === mainDirection
-    ).length;
-    return consistentCount / directions.length;
-  }
-
-  combineAnalyses(
-    priceTrend,
-    indicatorTrend,
-    structureTrend,
-    momentum,
-    volumes
-  ) {
-    // Pesos para cada tipo de análise
-    const weights = {
-      price: 0.3,
-      indicators: 0.25,
-      structure: 0.2,
-      momentum: 0.15,
-      volume: 0.1,
-    };
-
-    // Calcular direção combinada
-    const directions = [
-      { direction: priceTrend.direction, weight: weights.price },
-      { direction: indicatorTrend.direction, weight: weights.indicators },
-      { direction: structureTrend.direction, weight: weights.structure },
-      {
-        direction: momentum.strength > 0.5 ? priceTrend.direction : "neutral",
-        weight: weights.momentum,
-      },
-      {
-        direction:
-          volumes.trend === "increasing" ? priceTrend.direction : "neutral",
-        weight: weights.volume,
-      },
-    ];
-
-    const direction = this.calculateWeightedDirection(directions);
-
-    // Calcular força combinada
-    const strength =
-      priceTrend.strength * weights.price +
-      indicatorTrend.strength * weights.indicators +
-      structureTrend.strength * weights.structure +
-      momentum.strength * weights.momentum +
-      (volumes.current / volumes.average) * weights.volume;
-
-    // Calcular confiança baseada na consistência dos sinais
-    const confidence = this.calculateSignalConsistency(
-      priceTrend,
-      indicatorTrend,
-      structureTrend,
-      momentum,
-      volumes
-    );
-
-    return {
-      direction,
-      strength: Math.min(strength, 1),
-      confidence,
-      details: {
-        priceTrend,
-        indicatorTrend,
-        structureTrend,
-        momentum,
-        volumes,
-      },
-    };
-  }
-  calculateSignalConsistency(
-    priceTrend,
-    indicatorTrend,
-    structureTrend,
-    momentum,
-    volumes
-  ) {
-    const signals = [
-      priceTrend.direction,
-      indicatorTrend.direction,
-      structureTrend.direction,
-      momentum.strength > 0.5 ? priceTrend.direction : "neutral",
-      volumes.trend === "increasing" ? priceTrend.direction : "neutral",
-    ];
-
-    const mainDirection = this.getMajorityDirection(signals);
-    const consistentCount = signals.filter((s) => s === mainDirection).length;
-    return consistentCount / signals.length;
-  }
-
-  calculateWeightedDirection(directions) {
-    const weightedCounts = {
-      up: 0,
-      down: 0,
-      neutral: 0,
-    };
-
-    directions.forEach(({ direction, weight }) => {
-      weightedCounts[direction] += weight;
+    prices.forEach((price, i) => {
+      totalSS += Math.pow(price - mean, 2);
+      residualSS += Math.pow(price - (slope * i + intercept), 2);
     });
 
-    return Object.entries(weightedCounts).reduce((a, b) =>
-      a[1] > b[1] ? a : b
-    )[0];
+    return 1 - residualSS / totalSS;
   }
 
-  validateSignal(signal, historicalData) {
-    const minimumConfidence = 0.75;
-    const minimumStrength = 0.6;
+  determineTrendDirection(first, last, slope) {
+    const priceChange = (last - first) / first;
+    const threshold = 0.0001; // Ajuste conforme necessário
 
-    if (
-      signal.confidence < minimumConfidence ||
-      signal.strength < minimumStrength
-    ) {
-      return false;
-    }
-
-    // Verificar condições de mercado
-    const marketConditions = this.analyzeMarketConditions(historicalData);
-    if (!marketConditions.isFavorable) {
-      return false;
-    }
-
-    // Verificar divergências
-    if (signal.divergences.length > 0) {
-      return false;
-    }
-
-    // Verificar proximidade de níveis importantes
-    if (this.isNearKeyLevel(signal.entryPoints.suggested, historicalData)) {
-      return false;
-    }
-
-    return true;
-  }
-  async predictNextMove(prices) {
-    try {
-      const trend = await this.analyzeTrend(prices);
-      const indicators = this.calculateIndicators(prices);
-      const priceAction = this.analyzePriceAction(prices);
-
-      // Análise de níveis importantes
-      const nearestSupport = this.findNearestLevel(
-        prices[prices.length - 1],
-        priceAction.support
-      );
-      const nearestResistance = this.findNearestLevel(
-        prices[prices.length - 1],
-        priceAction.resistance
-      );
-
-      // Verificar divergências
-      const divergences = this.checkDivergences(prices, indicators);
-
-      // Calcular probabilidade de reversão
-      const reversalProbability = this.calculateReversalProbability(
-        trend,
-        indicators,
-        priceAction,
-        divergences
-      );
-
-      // Determinar pontos de entrada
-      const entryPoints = this.calculateEntryPoints(
-        prices[prices.length - 1],
-        trend,
-        nearestSupport,
-        nearestResistance
-      );
-
-      // Calcular stops dinâmicos
-      const stopLevels = this.calculateStopLevels(
-        prices,
-        trend.direction,
-        entryPoints
-      );
-
-      return {
-        ...trend,
-        entryPoints,
-        stopLevels,
-        reversalProbability,
-        divergences,
-      };
-    } catch (error) {
-      console.error("Erro na previsão:", error);
-      return null;
-    }
+    if (Math.abs(priceChange) < threshold) return "neutral";
+    if (slope > 0 && priceChange > 0) return "up";
+    if (slope < 0 && priceChange < 0) return "down";
+    return "neutral";
   }
 
-  confirmTrend(trends, priceAction) {
-    // Análise de concordância entre timeframes
+  calculateSingleTrendStrength(prices, highLow, regression) {
+    const volatility = this.calculateVolatility(prices);
+    const trendConsistency = regression.rSquared;
+    const priceRange = highLow.range / prices[0];
+
+    return {
+      value: trendConsistency * 0.4 + (1 - volatility) * 0.3 + priceRange * 0.3,
+      components: {
+        consistency: trendConsistency,
+        volatility: volatility,
+        range: priceRange,
+      },
+    };
+  }
+
+  checkTrendAlignment(trends) {
     const directions = Object.values(trends).map((t) => t.direction);
-    const mainDirection = directions.reduce((a, b) =>
-      directions.filter((v) => v === a).length >=
-      directions.filter((v) => v === b).length
-        ? a
-        : b
-    );
-
-    // Verificar se a tendência está se fortalecendo ou enfraquecendo
-    const recentSwings = priceAction.swings.slice(-4);
-    const swingConfirmation = this.analyzeSwings(recentSwings, mainDirection);
+    const mainDirection = this.getMajorityDirection(directions);
+    const alignedCount = directions.filter((d) => d === mainDirection).length;
 
     return {
       direction: mainDirection,
-      confirmed: swingConfirmation.confirmed,
-      strength: swingConfirmation.strength,
+      strength: alignedCount / directions.length,
+      isAligned: alignedCount === directions.length,
     };
   }
-  isIncreasing(numbers) {
-    for (let i = 1; i < numbers.length; i++) {
-      if (numbers[i] <= numbers[i - 1]) return false;
-    }
-    return true;
+
+  calculateTrendStrength(trends) {
+    const strengths = Object.values(trends).map((t) => t.strength.value);
+    const averageStrength =
+      strengths.reduce((a, b) => a + b) / strengths.length;
+    const alignment = this.checkTrendAlignment(trends);
+
+    return averageStrength * alignment.strength;
   }
 
-  isDecreasing(numbers) {
-    for (let i = 1; i < numbers.length; i++) {
-      if (numbers[i] >= numbers[i - 1]) return false;
-    }
-    return true;
-  }
-  analyzeSwings(swings, direction) {
-    if (swings.length < 2) return { confirmed: false, strength: 0 };
+  getMajorityDirection(directions) {
+    const counts = directions.reduce((acc, dir) => {
+      acc[dir] = (acc[dir] || 0) + 1;
+      return acc;
+    }, {});
 
-    const highs = swings.filter((s) => s.type === "high").map((s) => s.price);
-    const lows = swings.filter((s) => s.type === "low").map((s) => s.price);
-
-    if (direction === "up") {
-      const higherHighs = this.isIncreasing(highs);
-      const higherLows = this.isIncreasing(lows);
-      return {
-        confirmed: higherHighs && higherLows,
-        strength: higherHighs && higherLows ? 1 : 0.5,
-      };
-    } else {
-      const lowerHighs = this.isDecreasing(highs);
-      const lowerLows = this.isDecreasing(lows);
-      return {
-        confirmed: lowerHighs && lowerLows,
-        strength: lowerHighs && lowerLows ? 1 : 0.5,
-      };
-    }
+    return Object.entries(counts).reduce((a, b) => (a[1] > b[1] ? a : b))[0];
   }
 
-  // Adicionar método para calcular volatilidade
   calculateVolatility(prices) {
     const returns = [];
     for (let i = 1; i < prices.length; i++) {
       returns.push((prices[i] - prices[i - 1]) / prices[i - 1]);
     }
+
     const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
     const variance =
       returns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / returns.length;
+
     return Math.sqrt(variance);
   }
+  combineAnalyses(data) {
+    try {
+      const { indicators, volume, patterns, trends, volatility, momentum } =
+        data;
 
-  async getPerformanceMetrics() {
-    return {
-      modeloAtivo: await this.evaluateModel(this.model),
-      modeloBase: await this.evaluateModel(this.baselineModel),
-      dadosHistoricos: this.historicalData.length,
-      ultimoTreinamento: new Date(this.lastTrainingTime).toLocaleString(),
-    };
+      // Verificar dados mínimos necessários
+      if (!indicators || !trends) {
+        throw new Error("Dados insuficientes para análise");
+      }
+
+      // Análise de indicadores técnicos
+      const indicatorSignals = this.analyzeIndicatorSignals(indicators);
+
+      // Análise de tendência e momento
+      const trendAnalysis = this.analyzeTrendAndMomentum(trends, momentum);
+
+      // Análise de volume e volatilidade
+      const marketConditions = this.analyzeMarketConditions(volume, volatility);
+
+      // Confirmação de padrões
+      const patternConfirmation = this.validatePatterns(
+        patterns,
+        trends.trends
+      );
+
+      // Combinar todas as análises
+      const combinedAnalysis = this.generateFinalAnalysis({
+        indicatorSignals,
+        trendAnalysis,
+        marketConditions,
+        patternConfirmation,
+      });
+
+      return this.formatAnalysisResult(combinedAnalysis);
+    } catch (error) {
+      console.error("Erro na combinação de análises:", error);
+      return null;
+    }
   }
-  // Ajustar confiança baseado em volume
-  adjustConfidenceForVolume(confidence, volumeDivergence) {
-    if (volumeDivergence.type === "none") return confidence;
+  analyzeIndicatorSignals(indicators) {
+    try {
+      if (!indicators) {
+        console.warn("Indicadores ausentes em analyzeIndicatorSignals");
+        return {
+          direction: "neutral",
+          strength: 0,
+          signals: {},
+        };
+      }
 
-    // Reduzir confiança se houver divergência negativa
-    if (volumeDivergence.type === "negative") {
-      return confidence * (1 - volumeDivergence.strength);
+      console.log(
+        "Indicadores recebidos:",
+        JSON.stringify(indicators, null, 2)
+      );
+
+      const { rsi, macd, bollinger, ema } = indicators;
+      const signals = [];
+
+      // RSI Analysis
+      if (rsi && rsi.current) {
+        const rsiSignal = this.analyzeRSI(rsi);
+        console.log("Sinal RSI:", rsiSignal);
+        if (rsiSignal && rsiSignal.direction !== "neutral") {
+          signals.push(rsiSignal);
+        }
+      }
+
+      // MACD Analysis
+      if (macd && macd.histogram) {
+        const macdSignal = this.analyzeMACD(macd);
+        console.log("Sinal MACD:", macdSignal);
+        if (macdSignal && macdSignal.direction !== "neutral") {
+          signals.push(macdSignal);
+        }
+      }
+
+      // Bollinger Analysis
+      if (bollinger && bollinger.upper && bollinger.lower) {
+        const bollingerSignal = this.analyzeBollinger(bollinger);
+        console.log("Sinal Bollinger:", bollingerSignal);
+        if (bollingerSignal && bollingerSignal.direction !== "neutral") {
+          signals.push(bollingerSignal);
+        }
+      }
+
+      // EMA Analysis
+      if (ema && ema.ema20 && ema.ema50) {
+        const emaSignal = this.analyzeEMA(ema);
+        console.log("Sinal EMA:", emaSignal);
+        if (emaSignal && emaSignal.direction !== "neutral") {
+          signals.push(emaSignal);
+        }
+      }
+
+      console.log("Sinais válidos coletados:", signals.length);
+
+      // Se não houver sinais válidos, retornar neutral
+      if (signals.length === 0) {
+        console.log("Nenhum sinal válido encontrado");
+        return {
+          direction: "neutral",
+          strength: 0,
+          signals: {},
+        };
+      }
+
+      // Determinar direção dominante
+      const direction = this.determineOverallDirection(signals);
+      console.log("Direção calculada:", direction);
+
+      // Calcular força média apenas dos sinais válidos
+      const strength =
+        signals.reduce((acc, signal) => acc + (signal.strength || 0), 0) /
+        signals.length;
+
+      const result = {
+        direction,
+        strength: Math.min(strength, 1),
+        signals: {
+          rsi: signals.find((s) => s.type === "rsi"),
+          macd: signals.find((s) => s.type === "macd"),
+          bollinger: signals.find((s) => s.type === "bollinger"),
+          ema: signals.find((s) => s.type === "ema"),
+        },
+      };
+
+      console.log("Resultado final da análise:", result);
+      return result;
+    } catch (error) {
+      console.error("Erro na análise de indicadores:", error);
+      return {
+        direction: "neutral",
+        strength: 0,
+        signals: {},
+      };
+    }
+  }
+
+  analyzeRSI(rsi) {
+    const current = rsi.current;
+    let direction = "neutral";
+    let strength = 0;
+
+    // Zonas mais sensíveis
+    if (current <= 30) {
+      direction = "up";
+      strength = (30 - current) / 15;
+    } else if (current >= 70) {
+      direction = "down";
+      strength = (current - 70) / 15;
+    } else if (current < 45) {
+      direction = "up";
+      strength = ((45 - current) / 15) * 0.8; // 80% da força máxima
+    } else if (current > 55) {
+      direction = "down";
+      strength = ((current - 55) / 15) * 0.8;
     }
 
-    // Aumentar confiança se houver divergência positiva
-    if (volumeDivergence.type === "positive") {
-      return Math.min(confidence * (1 + volumeDivergence.strength), 1);
+    // Considerar tendência do RSI
+    if (rsi.trend === direction) {
+      strength *= 1.25; // Aumentar peso quando tendência confirma
+    }
+
+    // Considerar histórico
+    if (rsi.history && rsi.history.length >= 5) {
+      const trend = this.calculateRSITrend(rsi.history);
+      if (trend === direction) {
+        strength *= 1.2;
+      }
+    }
+
+    return {
+      type: "rsi",
+      direction,
+      strength: Math.min(strength, 1),
+    };
+  }
+
+  analyzeMACD(macd) {
+    const signal = {
+      type: "macd",
+      direction: "neutral",
+      strength: 0,
+    };
+
+    // Aumentar sensibilidade do MACD
+    const significance = Math.abs(macd.value - macd.signal) * 20000;
+    const histogramStrength = Math.abs(macd.histogram) * 15000;
+
+    if (macd.histogram > 0) {
+      signal.direction = "up";
+      signal.strength = Math.min((significance + histogramStrength) / 2, 1);
+    } else if (macd.histogram < 0) {
+      signal.direction = "down";
+      signal.strength = Math.min((significance + histogramStrength) / 2, 1);
+    }
+
+    // Considerar tendência
+    if (macd.trend === signal.direction) {
+      signal.strength *= 1.3;
+    }
+
+    return signal;
+  }
+
+  analyzeBollinger(bollinger) {
+    if (!bollinger.percentB && bollinger.upper && bollinger.lower && bollinger.middle) {
+      const price = bollinger.price || bollinger.middle;
+      bollinger.percentB = (price - bollinger.lower) / (bollinger.upper - bollinger.lower);
+    }
+
+    const signal = {
+      type: 'bollinger',
+      direction: "neutral",
+      strength: 0
+    };
+
+    if (bollinger.percentB !== null) {
+      if (bollinger.percentB <= 0.15) { // Mais sensível
+        signal.direction = "up";
+        signal.strength = Math.min((0.15 - bollinger.percentB) * 6.67, 1);
+      } else if (bollinger.percentB >= 0.85) {
+        signal.direction = "down";
+        signal.strength = Math.min((bollinger.percentB - 0.85) * 6.67, 1);
+      }
+    }
+
+    // Considerar largura das bandas
+    if (bollinger.bandwidth) {
+      signal.strength *= (1 + Math.min(bollinger.bandwidth * 1000, 0.5));
+    }
+
+    return signal;
+  }
+
+  analyzeEMA(ema) {
+    const signal = {
+      type: "ema",
+      direction: "neutral",
+      strength: 0,
+    };
+
+    // Calcular diferença percentual entre EMAs
+    const diff = (ema.ema20.current - ema.ema50.current) / ema.ema50.current;
+    const significance = Math.abs(diff) * 1000; // Aumentar sensibilidade
+
+    if (ema.ema20.current > ema.ema50.current) {
+      signal.direction = "up";
+      signal.strength = Math.min(significance, 1);
+    } else if (ema.ema20.current < ema.ema50.current) {
+      signal.direction = "down";
+      signal.strength = Math.min(significance, 1);
+    }
+
+    // Considerar tendências das médias
+    if (
+      ema.ema20.trend === signal.direction &&
+      ema.ema50.trend === signal.direction
+    ) {
+      signal.strength *= 1.2;
+    }
+
+    return signal;
+  }
+
+  analyzeTrendAndMomentum(trends, momentum) {
+    const trendAlignment = trends.alignment;
+    const momentumStrength = momentum ? momentum.strength : 0;
+
+    return {
+      direction: trendAlignment.direction,
+      strength: trendAlignment.strength * 0.7 + momentumStrength * 0.3,
+      isConfirmed: trendAlignment.isAligned && momentumStrength > 0.7,
+    };
+  }
+
+  analyzeMarketConditions(volume, volatility) {
+    const volumeQuality = volume ? this.analyzeVolumeQuality(volume) : 0;
+    const volatilityQuality = this.analyzeVolatilityQuality(volatility);
+
+    return {
+      isFavorable: volumeQuality > 0.7 && volatilityQuality > 0.7,
+      quality: (volumeQuality + volatilityQuality) / 2,
+      details: {
+        volume: volumeQuality,
+        volatility: volatilityQuality,
+      },
+    };
+  }
+
+  analyzeVolumeQuality(volume) {
+    if (!volume) return 0;
+
+    const volumeRatio = volume.ratio;
+    const volumeTrend =
+      volume.trend === "increasing" ? 1 : volume.trend === "stable" ? 0.5 : 0;
+
+    return Math.min(volumeRatio * 0.7 + volumeTrend * 0.3, 1);
+  }
+
+  analyzeVolatilityQuality(volatility) {
+    if (!volatility) return 0;
+
+    // Volatilidade ideal entre 0.001 e 0.005
+    if (volatility < 0.001) return volatility / 0.001;
+    if (volatility > 0.005)
+      return Math.max(0, 1 - (volatility - 0.005) / 0.005);
+    return 1;
+  }
+
+  validatePatterns(patterns, trends) {
+    if (!patterns) return { isValid: false, strength: 0 };
+
+    const patternStrength = this.calculatePatternStrength(patterns);
+    const trendConfirmation = this.checkPatternTrendAlignment(patterns, trends);
+
+    return {
+      isValid: patternStrength > 0.7 && trendConfirmation,
+      strength: patternStrength * (trendConfirmation ? 1 : 0.5),
+    };
+  }
+
+  generateFinalAnalysis(data) {
+    const {
+      indicatorSignals,
+      trendAnalysis,
+      marketConditions,
+      patternConfirmation,
+    } = data;
+
+    // Pesos para cada componente
+    const weights = {
+      indicators: 0.35,
+      trend: 0.3,
+      market: 0.25,
+      patterns: 0.1,
+    };
+
+    // Calcular pontuação final
+    const score =
+      indicatorSignals.strength * weights.indicators +
+      trendAnalysis.strength * weights.trend +
+      marketConditions.quality * weights.market +
+      patternConfirmation.strength * weights.patterns;
+
+    // Determinar direção final
+    const direction = this.determineOverallDirection({
+      indicators: indicatorSignals.direction,
+      trend: trendAnalysis.direction,
+    });
+
+    return {
+      direction,
+      score,
+      confidence: this.calculateConfidence({
+        score,
+        marketConditions,
+        trendAnalysis,
+      }),
+      details: {
+        indicators: indicatorSignals,
+        trend: trendAnalysis,
+        market: marketConditions,
+        patterns: patternConfirmation,
+      },
+    };
+  }
+  calculateConfidence(data) {
+    const { score, marketConditions, trendAnalysis } = data;
+
+    // Fatores de ajuste
+    const marketFactor = marketConditions.isFavorable ? 1 : 0.7;
+    const trendFactor = trendAnalysis.isConfirmed ? 1 : 0.8;
+
+    // Cálculo base de confiança
+    let confidence = score * marketFactor * trendFactor;
+
+    // Ajustes finais
+    confidence = this.applyConfidenceAdjustments(confidence, data);
+
+    // Garantir limites
+    return Math.min(Math.max(confidence, 0), 1);
+  }
+
+  applyConfidenceAdjustments(confidence, data) {
+    // Reduzir confiança se houver sinais contraditórios
+    if (this.hasContradictorySignals(data)) {
+      confidence *= 0.8;
+    }
+
+    // Reduzir se a volatilidade estiver muito alta
+    if (data.marketConditions.details.volatility < 0.5) {
+      confidence *= 0.9;
     }
 
     return confidence;
   }
 
-  // Confirmar tendência considerando volume
-  confirmTrendWithVolume(trends, priceAction, volumes) {
-    const baseConfirmation = this.confirmTrend(trends, priceAction);
+  hasContradictorySignals(data) {
+    const directions = [
+      data.indicators?.direction,
+      data.trend?.direction,
+    ].filter(Boolean);
 
-    // Verificar se volume suporta a tendência
-    const volumeSupportsTrend =
-      volumes.trend === "increasing" && volumes.current > volumes.average;
-
-    return {
-      ...baseConfirmation,
-      strength: volumeSupportsTrend
-        ? baseConfirmation.strength
-        : baseConfirmation.strength * 0.8,
-    };
-  }
-  analyzeRSITrend(rsi) {
-    const lastRSI = rsi[rsi.length - 1];
-    let direction = "neutral";
-    let strength = 0;
-
-    if (lastRSI < 30) {
-      direction = "up";
-      strength = (30 - lastRSI) / 30;
-    } else if (lastRSI > 70) {
-      direction = "down";
-      strength = (lastRSI - 70) / 30;
-    } else {
-      direction = lastRSI > 50 ? "up" : "down";
-      strength = Math.abs(50 - lastRSI) / 50;
-    }
-
-    return { direction, strength };
+    return directions.some((dir) => dir !== directions[0]);
   }
 
-  analyzeMACDTrend(macd) {
-    const recent = macd.slice(-5);
-    const lastMACD = recent[recent.length - 1];
+  formatAnalysisResult(analysis) {
+    if (!analysis) return null;
 
-    const direction = lastMACD.MACD > lastMACD.signal ? "up" : "down";
-    const strength =
-      Math.abs(lastMACD.MACD - lastMACD.signal) / Math.abs(lastMACD.MACD);
+    const { direction, confidence, details } = analysis;
 
-    return { direction, strength: Math.min(strength, 1) };
-  }
-
-  analyzeBollingerTrend(bollinger) {
-    const recent = bollinger[bollinger.length - 1];
-    const middle = recent.middle;
-    const price = recent.price || middle;
-
-    const percentB = (price - recent.lower) / (recent.upper - recent.lower);
-
-    let direction = "neutral";
-    let strength = 0;
-
-    if (percentB < 0.2) {
-      direction = "up";
-      strength = 1 - percentB;
-    } else if (percentB > 0.8) {
-      direction = "down";
-      strength = percentB;
-    }
-
-    return { direction, strength };
-  }
-  identifyPatterns(prices, swings) {
-    try {
-      // Verificar se os parâmetros são válidos
-      if (!Array.isArray(prices) || prices.length < this.minPrices) {
-        console.log(
-          "Dados de preços insuficientes para identificação de padrões"
-        );
-        return this.getDefaultPatterns();
-      }
-
-      // Gerar swings se não fornecidos
-      const actualSwings = swings || this.identifySwings(prices);
-
+    // Só gerar sinal se atingir confiança mínima
+    if (confidence < this.config.minConfidence) {
       return {
-        doubleTop: this.findDoubleTop(prices, actualSwings),
-        doubleBottom: this.findDoubleBottom(prices, actualSwings),
-        headAndShoulders: this.findHeadAndShoulders(prices, actualSwings),
-        triangles: this.findTriangles(prices, actualSwings),
+        direction: "neutral",
+        confidence: 0,
+        shouldTrade: false,
+        details: details,
       };
-    } catch (error) {
-      console.error("Erro em identifyPatterns:", error);
-      return this.getDefaultPatterns();
     }
-  }
-  getDefaultPatterns() {
+
+    // Calcular níveis de entrada e saída
+    const levels = this.calculateTradingLevels(details);
+
     return {
-      doubleTop: false,
-      doubleBottom: false,
-      headAndShoulders: false,
-      triangles: { ascending: false, descending: false },
+      direction: direction,
+      confidence: confidence,
+      shouldTrade: true,
+      suggestedEntry: levels.entry,
+      stopLoss: levels.stopLoss,
+      takeProfit: levels.takeProfit,
+      timeframe: this.determineBestTimeframe(details),
+      details: {
+        ...details,
+        levels,
+      },
     };
   }
 
-  identifyKeyLevels(prices, swings) {
-    const levels = {
-      support: [],
-      resistance: [],
-      pivot: null,
-    };
+  calculateTradingLevels(details) {
+    const { trend, market } = details;
+    const volatility = market.details.volatility;
+    const atr = this.calculateATR(trend.prices);
 
-    // Identificar níveis de suporte e resistência
-    swings.forEach((swing) => {
-      if (swing.type === "low") {
-        levels.support.push(swing.price);
-      } else {
-        levels.resistance.push(swing.price);
-      }
+    return {
+      entry: trend.current,
+      stopLoss: this.calculateStopLoss(trend, atr, volatility),
+      takeProfit: this.calculateTakeProfit(trend, atr, volatility),
+    };
+  }
+
+  calculateATR(prices, period = 14) {
+    if (!prices || prices.length < period) return 0;
+
+    const trs = [];
+    for (let i = 1; i < prices.length; i++) {
+      const high = prices[i];
+      const low = prices[i];
+      const prevClose = prices[i - 1];
+
+      const tr = Math.max(
+        high - low,
+        Math.abs(high - prevClose),
+        Math.abs(low - prevClose)
+      );
+      trs.push(tr);
+    }
+
+    return trs.slice(-period).reduce((a, b) => a + b) / period;
+  }
+
+  calculateStopLoss(trend, atr, volatility) {
+    const direction = trend.direction;
+    const multiplier = 2 + volatility * 2; // Ajusta com base na volatilidade
+
+    return direction === "up"
+      ? trend.current - atr * multiplier
+      : trend.current + atr * multiplier;
+  }
+
+  calculateTakeProfit(trend, atr, volatility) {
+    const direction = trend.direction;
+    const multiplier = 3 + volatility * 2; // Maior que SL para RR positivo
+
+    return direction === "up"
+      ? trend.current + atr * multiplier
+      : trend.current - atr * multiplier;
+  }
+
+  determineBestTimeframe(details) {
+    const { trend, market } = details;
+    const volatility = market.details.volatility;
+
+    // Ajustar timeframe baseado na volatilidade e força da tendência
+    if (volatility > 0.004 || trend.strength < 0.6) {
+      return this.timeframes.M5; // Mais conservador
+    } else if (trend.strength > 0.8 && volatility < 0.002) {
+      return this.timeframes.M1; // Mais agressivo
+    }
+    return this.timeframes.M15; // Moderado
+  }
+
+  // Funções de Cache
+  generateCacheKey(prices) {
+    return prices.slice(-5).join(",");
+  }
+
+  getFromCache(key) {
+    const cached = this.analysisCache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.cacheDuration) {
+      return cached.data;
+    }
+    return null;
+  }
+
+  updateCache(key, data) {
+    this.analysisCache.set(key, {
+      data,
+      timestamp: Date.now(),
     });
 
-    // Calcular pivot point
-    const high = Math.max(...prices);
-    const low = Math.min(...prices);
-    const close = prices[prices.length - 1];
-    levels.pivot = (high + low + close) / 3;
-
-    return levels;
-  }
-  calculateMomentumStrength(prices, rsi, macd) {
-    const priceChange = (prices[prices.length - 1] - prices[0]) / prices[0];
-    const rsiStrength = Math.abs(rsi[rsi.length - 1] - 50) / 50;
-    const macdStrength = Math.abs(macd[macd.length - 1].MACD);
-
-    return (Math.abs(priceChange) + rsiStrength + macdStrength) / 3;
+    // Limpar cache antigo
+    this.cleanupCache();
   }
 
-  checkMomentumDivergences(prices, rsi, macd) {
-    const divergences = [];
-
-    // Regular Bullish Divergence
-    if (this.isRegularBullishDivergence(prices, rsi)) {
-      divergences.push({ type: "bullish", strength: "regular" });
+  cleanupCache() {
+    const now = Date.now();
+    for (const [key, value] of this.analysisCache.entries()) {
+      if (now - value.timestamp > this.cacheDuration) {
+        this.analysisCache.delete(key);
+      }
     }
-
-    // Regular Bearish Divergence
-    if (this.isRegularBearishDivergence(prices, rsi)) {
-      divergences.push({ type: "bearish", strength: "regular" });
-    }
-
-    return divergences;
   }
 
-  calculateAcceleration(prices) {
-    const returns = [];
-    for (let i = 1; i < prices.length; i++) {
-      returns.push((prices[i] - prices[i - 1]) / prices[i - 1]);
-    }
-
-    const acceleration = [];
-    for (let i = 1; i < returns.length; i++) {
-      acceleration.push(returns[i] - returns[i - 1]);
+  // Função pública para previsão
+  async predictNextMove(prices) {
+    const analysis = await this.analyzeTrend(prices);
+    if (!analysis || !analysis.shouldTrade) {
+      return null;
     }
 
     return {
-      current: acceleration[acceleration.length - 1],
-      average: acceleration.reduce((a, b) => a + b, 0) / acceleration.length,
+      direction: analysis.direction,
+      confidence: analysis.confidence,
+      suggestedEntry: analysis.suggestedEntry,
+      stopLoss: analysis.stopLoss,
+      takeProfit: analysis.takeProfit,
+      timeFrame: analysis.timeframe,
+      indicators: analysis.details.indicators,
     };
   }
-  // 2. Ajuste nos critérios de padrões
-  findDoubleTop(prices, swings) {
+  identifyPatterns(prices) {
     try {
-      if (!Array.isArray(swings) || swings.length < 4) return false;
-
-      const tops = swings.filter((s) => s.type === "high").slice(-4);
-      if (tops.length < 2) return false;
-
-      const tolerance = 0.0001; // Mais restritivo
-      const minDistance = 10; // Mínimo de barras entre topos
-
-      for (let i = 0; i < tops.length - 1; i++) {
-        for (let j = i + 1; j < tops.length; j++) {
-          const priceDiff =
-            Math.abs(tops[i].price - tops[j].price) / tops[i].price;
-          const indexDiff = Math.abs(tops[i].index - tops[j].index);
-
-          if (priceDiff < tolerance && indexDiff >= minDistance) {
-            // Verificar se há um vale entre os topos
-            const hasValley = swings.some(
-              (s) =>
-                s.type === "low" &&
-                s.index > tops[i].index &&
-                s.index < tops[j].index &&
-                s.price < Math.min(tops[i].price, tops[j].price)
-            );
-
-            if (hasValley) return true;
-          }
-        }
-      }
-      return false;
-    } catch (error) {
-      console.error("Erro em findDoubleTop:", error);
-      return false;
-    }
-  }
-
-  findDoubleBottom(prices, swings) {
-    try {
-      // Verificar se swings existe e é um array
-      if (!Array.isArray(swings) || swings.length === 0) {
-        console.warn("Dados de swings inválidos em findDoubleBottom");
-        return false;
-      }
-
-      // Filtrar fundos com verificação de segurança
-      const bottoms = swings.filter((s) => s && s.type === "low");
-
-      // Verificar se há bottoms suficientes
-      if (bottoms.length < 2) {
-        return false;
-      }
-
-      const tolerance = 0.0002;
-      const lastTwo = bottoms.slice(-2);
-
-      // Verificar se os preços são válidos
-      if (!lastTwo[0]?.price || !lastTwo[1]?.price) {
-        return false;
-      }
-
-      return (
-        Math.abs(lastTwo[0].price - lastTwo[1].price) / lastTwo[0].price <
-        tolerance
-      );
-    } catch (error) {
-      console.error("Erro em findDoubleBottom:", error);
-      return false;
-    }
-  }
-
-  findHeadAndShoulders(prices, swings) {
-    try {
-      // Verificar se swings existe e é um array
-      if (!Array.isArray(swings) || swings.length === 0) {
-        console.warn("Dados de swings inválidos em findHeadAndShoulders");
-        return false;
-      }
-
-      // Filtrar topos com verificação de segurança
-      const tops = swings.filter((s) => s && s.type === "high").slice(-3);
-
-      // Verificar se há tops suficientes
-      if (tops.length < 3) {
-        return false;
-      }
-
-      const [leftShoulder, head, rightShoulder] = tops;
-      const tolerance = 0.0003;
-
-      // Verificar se todos os preços são válidos
-      if (!leftShoulder?.price || !head?.price || !rightShoulder?.price) {
-        return false;
-      }
-
-      return (
-        head.price > leftShoulder.price &&
-        head.price > rightShoulder.price &&
-        Math.abs(leftShoulder.price - rightShoulder.price) /
-          leftShoulder.price <
-          tolerance
-      );
-    } catch (error) {
-      console.error("Erro em findHeadAndShoulders:", error);
-      return false;
-    }
-  }
-
-  findTriangles(prices, swings) {
-    try {
-      // Verificar se swings existe e é um array
-      if (!Array.isArray(swings) || swings.length === 0) {
-        console.warn("Dados de swings inválidos em findTriangles");
-        return { ascending: false, descending: false };
-      }
-
-      // Filtrar topos e fundos com verificação de segurança
-      const highs = swings.filter((s) => s && s.type === "high").slice(-3);
-      const lows = swings.filter((s) => s && s.type === "low").slice(-3);
-
-      if (highs.length < 3 || lows.length < 3) {
-        return { ascending: false, descending: false };
-      }
-
-      // Verificar se todos os preços são válidos
-      const validHighs = highs.every((h) => h?.price !== undefined);
-      const validLows = lows.every((l) => l?.price !== undefined);
-
-      if (!validHighs || !validLows) {
-        return { ascending: false, descending: false };
-      }
-
-      const highsSlope = this.calculateSlope(highs.map((h) => h.price));
-      const lowsSlope = this.calculateSlope(lows.map((l) => l.price));
-
-      return {
-        ascending: lowsSlope > 0 && Math.abs(highsSlope) < 0.0001,
-        descending: highsSlope < 0 && Math.abs(lowsSlope) < 0.0001,
-      };
-    } catch (error) {
-      console.error("Erro em findTriangles:", error);
-      return { ascending: false, descending: false };
-    }
-  }
-  isRegularBullishDivergence(prices, rsi) {
-    const priceLen = prices.length;
-    const rsiLen = rsi.length;
-    if (priceLen < 2 || rsiLen < 2) return false;
-
-    const priceLow1 = prices[priceLen - 1];
-    const priceLow2 = prices[priceLen - 2];
-    const rsiLow1 = rsi[rsiLen - 1];
-    const rsiLow2 = rsi[rsiLen - 2];
-
-    return priceLow1 < priceLow2 && rsiLow1 > rsiLow2;
-  }
-
-  isRegularBearishDivergence(prices, rsi) {
-    const priceLen = prices.length;
-    const rsiLen = rsi.length;
-    if (priceLen < 2 || rsiLen < 2) return false;
-
-    const priceHigh1 = prices[priceLen - 1];
-    const priceHigh2 = prices[priceLen - 2];
-    const rsiHigh1 = rsi[rsiLen - 1];
-    const rsiHigh2 = rsi[rsiLen - 2];
-
-    return priceHigh1 > priceHigh2 && rsiHigh1 < rsiHigh2;
-  }
-  getRSIDirection(rsi) {
-    const lastRSI = rsi[rsi.length - 1];
-    if (lastRSI > 60) return "up";
-    if (lastRSI < 40) return "down";
-    return "neutral";
-  }
-
-  getMACDDirection(macd) {
-    const lastMACD = macd[macd.length - 1];
-    if (lastMACD.MACD > lastMACD.signal) return "up";
-    if (lastMACD.MACD < lastMACD.signal) return "down";
-    return "neutral";
-  }
-
-  getBollingerDirection(bollinger) {
-    const latest = bollinger[bollinger.length - 1];
-    const price = latest.price || latest.middle;
-
-    if (price > latest.upper) return "down";
-    if (price < latest.lower) return "up";
-    return "neutral";
-  }
-  analyzeVolumeProfile(historicalData) {
-    const volumes = this.calculateVolume(historicalData);
-    const averageVolume = volumes.average;
-    const currentVolume = volumes.current;
-
-    return {
-      isAdequate: currentVolume > averageVolume * 0.8,
-      ratio: currentVolume / averageVolume,
-      trend: volumes.trend,
-    };
-  }
-  determineStructure(swings, patterns, levels) {
-    const structure = {
-      direction: "neutral",
-      strength: 0,
-      pattern: null,
-    };
-
-    // Determinar direção baseada nos swings
-    const recentSwings = swings.slice(-4);
-    if (recentSwings.length >= 2) {
-      const highs = recentSwings.filter((s) => s.type === "high");
-      const lows = recentSwings.filter((s) => s.type === "low");
-
-      if (highs.length >= 2 && this.isIncreasing(highs.map((h) => h.price))) {
-        structure.direction = "up";
-        structure.strength += 0.3;
-      } else if (
-        lows.length >= 2 &&
-        this.isDecreasing(lows.map((l) => l.price))
-      ) {
-        structure.direction = "down";
-        structure.strength += 0.3;
-      }
-    }
-
-    // Adicionar força baseada em padrões
-    if (patterns.doubleBottom && structure.direction === "up")
-      structure.strength += 0.2;
-    if (patterns.doubleTop && structure.direction === "down")
-      structure.strength += 0.2;
-    if (patterns.headAndShoulders) {
-      structure.direction = "down";
-      structure.strength += 0.3;
-    }
-
-    return structure;
-  }
-  analyzeTrendStrength(historicalData) {
-    try {
-      if (
-        !Array.isArray(historicalData) ||
-        historicalData.length < this.minPrices
-      ) {
+      if (!Array.isArray(prices) || prices.length < 30) {
         return {
+          patterns: [],
           strength: 0,
-          direction: "neutral",
-          consistency: 0,
+          reliability: 0,
         };
       }
 
-      // Calcular médias móveis para diferentes períodos
-      const ma20 = this.calculateMA(historicalData, 20);
-      const ma50 = this.calculateMA(historicalData, 50);
-      const ma200 = this.calculateMA(
-        historicalData,
-        Math.min(200, historicalData.length)
+      const patterns = {
+        doubleTop: this.findDoubleTop(prices),
+        doubleBottom: this.findDoubleBottom(prices),
+        headAndShoulders: this.findHeadAndShoulders(prices),
+        inverseHeadAndShoulders: this.findInverseHeadAndShoulders(prices),
+        triangles: this.findTrianglePatterns(prices),
+      };
+
+      const strengthAndReliability = this.calculatePatternMetrics(patterns);
+
+      return {
+        patterns,
+        ...strengthAndReliability,
+      };
+    } catch (error) {
+      console.error("Erro na identificação de padrões:", error);
+      return {
+        patterns: [],
+        strength: 0,
+        reliability: 0,
+      };
+    }
+  }
+  checkPatternTrendAlignment(patterns, trends) {
+    try {
+      if (!patterns || !trends) {
+        return false;
+      }
+
+      // Obter direção dominante da tendência
+      const trendDirection = this.getTrendDirection(trends);
+
+      // Se não houver tendência clara, retornar falso
+      if (trendDirection === "neutral") {
+        return false;
+      }
+
+      // Verificar alinhamento de cada padrão com a tendência
+      return this.validatePatternAlignment(patterns, trendDirection);
+    } catch (error) {
+      console.error(
+        "Erro ao verificar alinhamento de padrões com tendência:",
+        error
       );
+      return false;
+    }
+  }
 
-      const currentPrice = historicalData[historicalData.length - 1];
+  getTrendDirection(trends) {
+    try {
+      if (!trends) return "neutral";
 
-      // Determinar direção baseada nas médias móveis
+      // Pesos para diferentes timeframes
+      const weights = {
+        M5: 0.2, // 5 minutos
+        M15: 0.3, // 15 minutos
+        M30: 0.5, // 30 minutos
+      };
+
+      const directions = {
+        up: 0,
+        down: 0,
+        neutral: 0,
+      };
+
+      // Somar direções ponderadas
+      Object.entries(trends).forEach(([timeframe, trend]) => {
+        if (trend && trend.direction && weights[timeframe]) {
+          directions[trend.direction] += weights[timeframe];
+        }
+      });
+
+      // Encontrar direção dominante
+      const dominantDirection = Object.entries(directions).reduce((a, b) =>
+        a[1] > b[1] ? a : b
+      )[0];
+
+      // Verificar se a direção dominante é significativa
+      const totalWeight = Object.values(directions).reduce((a, b) => a + b, 0);
+      const threshold = 0.6; // 60% dos sinais precisam concordar
+
+      return directions[dominantDirection] / totalWeight >= threshold
+        ? dominantDirection
+        : "neutral";
+    } catch (error) {
+      console.error("Erro ao determinar direção da tendência:", error);
+      return "neutral";
+    }
+  }
+
+  validatePatternAlignment(patterns, trendDirection) {
+    try {
+      // Verificar padrões de reversão
+      if (patterns.doubleTop && patterns.doubleTop.found) {
+        if (trendDirection !== "down") return false;
+      }
+
+      if (patterns.doubleBottom && patterns.doubleBottom.found) {
+        if (trendDirection !== "up") return false;
+      }
+
+      if (patterns.headAndShoulders && patterns.headAndShoulders.found) {
+        if (trendDirection !== "down") return false;
+      }
+
+      if (
+        patterns.inverseHeadAndShoulders &&
+        patterns.inverseHeadAndShoulders.found
+      ) {
+        if (trendDirection !== "up") return false;
+      }
+
+      // Verificar padrões de continuação
+      if (patterns.triangles) {
+        const triangleAlignment = this.checkTriangleAlignment(
+          patterns.triangles,
+          trendDirection
+        );
+        if (!triangleAlignment) return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Erro ao validar alinhamento de padrões:", error);
+      return false;
+    }
+  }
+
+  checkTriangleAlignment(triangles, trendDirection) {
+    try {
+      if (!triangles) return true;
+
+      // Verificar triângulo ascendente
+      if (triangles.ascending && triangles.ascending.found) {
+        if (trendDirection !== "up") return false;
+      }
+
+      // Verificar triângulo descendente
+      if (triangles.descending && triangles.descending.found) {
+        if (trendDirection !== "down") return false;
+      }
+
+      // Triângulo simétrico pode ser válido em qualquer direção
+      if (triangles.symmetric && triangles.symmetric.found) {
+        return true;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Erro ao verificar alinhamento de triângulos:", error);
+      return false;
+    }
+  }
+
+  isPatternValid(pattern, trendDirection) {
+    if (!pattern || !pattern.found) return true;
+
+    // Verificar força mínima do padrão
+    const minStrength = 0.7;
+    if (pattern.strength < minStrength) return false;
+
+    // Verificar alinhamento com a tendência
+    switch (pattern.type) {
+      case "doubleTop":
+        return trendDirection === "down";
+      case "doubleBottom":
+        return trendDirection === "up";
+      case "headAndShoulders":
+        return trendDirection === "down";
+      case "inverseHeadAndShoulders":
+        return trendDirection === "up";
+      default:
+        return true;
+    }
+  }
+
+  findDoubleTop(prices) {
+    try {
+      const tolerance = 0.0002; // 0.02%
+      const minDistance = 5; // Mínimo de barras entre topos
+      const peaks = this.findPeaks(prices);
+
+      for (let i = 0; i < peaks.length - 1; i++) {
+        const peak1 = peaks[i];
+        const peak2 = peaks[i + 1];
+
+        if (peak2.index - peak1.index >= minDistance) {
+          const priceDiff = Math.abs(peak1.price - peak2.price) / peak1.price;
+          if (priceDiff <= tolerance) {
+            return {
+              found: true,
+              price1: peak1.price,
+              price2: peak2.price,
+              index1: peak1.index,
+              index2: peak2.index,
+            };
+          }
+        }
+      }
+
+      return { found: false };
+    } catch (error) {
+      console.error("Erro em findDoubleTop:", error);
+      return { found: false };
+    }
+  }
+
+  findDoubleBottom(prices) {
+    try {
+      const tolerance = 0.0002;
+      const minDistance = 5;
+      const troughs = this.findTroughs(prices);
+
+      for (let i = 0; i < troughs.length - 1; i++) {
+        const trough1 = troughs[i];
+        const trough2 = troughs[i + 1];
+
+        if (trough2.index - trough1.index >= minDistance) {
+          const priceDiff =
+            Math.abs(trough1.price - trough2.price) / trough1.price;
+          if (priceDiff <= tolerance) {
+            return {
+              found: true,
+              price1: trough1.price,
+              price2: trough2.price,
+              index1: trough1.index,
+              index2: trough2.index,
+            };
+          }
+        }
+      }
+
+      return { found: false };
+    } catch (error) {
+      console.error("Erro em findDoubleBottom:", error);
+      return { found: false };
+    }
+  }
+
+  findHeadAndShoulders(prices) {
+    try {
+      const peaks = this.findPeaks(prices);
+      if (peaks.length < 3) return { found: false };
+
+      const tolerance = 0.0002;
+
+      for (let i = 0; i < peaks.length - 2; i++) {
+        const leftShoulder = peaks[i];
+        const head = peaks[i + 1];
+        const rightShoulder = peaks[i + 2];
+
+        // Verificar se o head é mais alto que os ombros
+        if (
+          head.price > leftShoulder.price &&
+          head.price > rightShoulder.price
+        ) {
+          // Verificar se os ombros estão aproximadamente na mesma altura
+          const shoulderDiff =
+            Math.abs(leftShoulder.price - rightShoulder.price) /
+            leftShoulder.price;
+          if (shoulderDiff <= tolerance) {
+            return {
+              found: true,
+              leftShoulder,
+              head,
+              rightShoulder,
+            };
+          }
+        }
+      }
+
+      return { found: false };
+    } catch (error) {
+      console.error("Erro em findHeadAndShoulders:", error);
+      return { found: false };
+    }
+  }
+
+  findInverseHeadAndShoulders(prices) {
+    try {
+      const troughs = this.findTroughs(prices);
+      if (troughs.length < 3) return { found: false };
+
+      const tolerance = 0.0002;
+
+      for (let i = 0; i < troughs.length - 2; i++) {
+        const leftShoulder = troughs[i];
+        const head = troughs[i + 1];
+        const rightShoulder = troughs[i + 2];
+
+        if (
+          head.price < leftShoulder.price &&
+          head.price < rightShoulder.price
+        ) {
+          const shoulderDiff =
+            Math.abs(leftShoulder.price - rightShoulder.price) /
+            leftShoulder.price;
+          if (shoulderDiff <= tolerance) {
+            return {
+              found: true,
+              leftShoulder,
+              head,
+              rightShoulder,
+            };
+          }
+        }
+      }
+
+      return { found: false };
+    } catch (error) {
+      console.error("Erro em findInverseHeadAndShoulders:", error);
+      return { found: false };
+    }
+  }
+
+  findTrianglePatterns(prices) {
+    try {
+      const peaks = this.findPeaks(prices);
+      const troughs = this.findTroughs(prices);
+
+      return {
+        ascending: this.findAscendingTriangle(peaks, troughs),
+        descending: this.findDescendingTriangle(peaks, troughs),
+        symmetric: this.findSymmetricTriangle(peaks, troughs),
+      };
+    } catch (error) {
+      console.error("Erro em findTrianglePatterns:", error);
+      return {
+        ascending: { found: false },
+        descending: { found: false },
+        symmetric: { found: false },
+      };
+    }
+  }
+
+  findPeaks(prices) {
+    const peaks = [];
+    for (let i = 1; i < prices.length - 1; i++) {
+      if (prices[i] > prices[i - 1] && prices[i] > prices[i + 1]) {
+        peaks.push({ price: prices[i], index: i });
+      }
+    }
+    return peaks;
+  }
+
+  findTroughs(prices) {
+    const troughs = [];
+    for (let i = 1; i < prices.length - 1; i++) {
+      if (prices[i] < prices[i - 1] && prices[i] < prices[i + 1]) {
+        troughs.push({ price: prices[i], index: i });
+      }
+    }
+    return troughs;
+  }
+
+  findAscendingTriangle(peaks, troughs) {
+    try {
+      if (peaks.length < 2 || troughs.length < 2) return { found: false };
+
+      const resistance = this.calculateResistance(peaks);
+      const support = this.calculateSupport(troughs);
+
+      if (support.slope > 0 && Math.abs(resistance.slope) < 0.0001) {
+        return {
+          found: true,
+          resistance: resistance.level,
+          support: support.level,
+        };
+      }
+
+      return { found: false };
+    } catch (error) {
+      console.error("Erro em findAscendingTriangle:", error);
+      return { found: false };
+    }
+  }
+
+  findDescendingTriangle(peaks, troughs) {
+    try {
+      if (peaks.length < 2 || troughs.length < 2) return { found: false };
+
+      const resistance = this.calculateResistance(peaks);
+      const support = this.calculateSupport(troughs);
+
+      if (resistance.slope < 0 && Math.abs(support.slope) < 0.0001) {
+        return {
+          found: true,
+          resistance: resistance.level,
+          support: support.level,
+        };
+      }
+
+      return { found: false };
+    } catch (error) {
+      console.error("Erro em findDescendingTriangle:", error);
+      return { found: false };
+    }
+  }
+
+  findSymmetricTriangle(peaks, troughs) {
+    try {
+      if (peaks.length < 2 || troughs.length < 2) return { found: false };
+
+      const resistance = this.calculateResistance(peaks);
+      const support = this.calculateSupport(troughs);
+
+      if (Math.abs(resistance.slope + support.slope) < 0.0001) {
+        return {
+          found: true,
+          resistance: resistance.level,
+          support: support.level,
+        };
+      }
+
+      return { found: false };
+    } catch (error) {
+      console.error("Erro em findSymmetricTriangle:", error);
+      return { found: false };
+    }
+  }
+
+  calculateResistance(peaks) {
+    if (peaks.length < 2) return { level: 0, slope: 0 };
+
+    const x = peaks.map((p) => p.index);
+    const y = peaks.map((p) => p.price);
+    const regression = this.linearRegression(x, y);
+
+    return {
+      level: regression.b,
+      slope: regression.m,
+    };
+  }
+
+  calculateSupport(troughs) {
+    if (troughs.length < 2) return { level: 0, slope: 0 };
+
+    const x = troughs.map((t) => t.index);
+    const y = troughs.map((t) => t.price);
+    const regression = this.linearRegression(x, y);
+
+    return {
+      level: regression.b,
+      slope: regression.m,
+    };
+  }
+
+  linearRegression(x, y) {
+    const n = x.length;
+    let sumX = 0;
+    let sumY = 0;
+    let sumXY = 0;
+    let sumXX = 0;
+
+    for (let i = 0; i < n; i++) {
+      sumX += x[i];
+      sumY += y[i];
+      sumXY += x[i] * y[i];
+      sumXX += x[i] * x[i];
+    }
+
+    const m = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const b = (sumY - m * sumX) / n;
+
+    return { m, b };
+  }
+
+  calculatePatternMetrics(patterns) {
+    let strength = 0;
+    let reliability = 0;
+    let patternCount = 0;
+
+    // Avaliar cada padrão encontrado
+    if (patterns.doubleTop.found) {
+      strength += 0.8;
+      reliability += 0.7;
+      patternCount++;
+    }
+    if (patterns.doubleBottom.found) {
+      strength += 0.8;
+      reliability += 0.7;
+      patternCount++;
+    }
+    if (patterns.headAndShoulders.found) {
+      strength += 0.9;
+      reliability += 0.8;
+      patternCount++;
+    }
+    if (patterns.inverseHeadAndShoulders.found) {
+      strength += 0.9;
+      reliability += 0.8;
+      patternCount++;
+    }
+    if (
+      patterns.triangles.ascending.found ||
+      patterns.triangles.descending.found ||
+      patterns.triangles.symmetric.found
+    ) {
+      strength += 0.7;
+      reliability += 0.6;
+      patternCount++;
+    }
+
+    // Normalizar os valores
+    if (patternCount > 0) {
+      strength /= patternCount;
+      reliability /= patternCount;
+    }
+
+    return { strength, reliability };
+  }
+  calculateMomentum(prices, indicators) {
+    try {
+      if (!Array.isArray(prices) || prices.length < 14) {
+        return {
+          strength: 0,
+          direction: "neutral",
+          momentum: 0,
+        };
+      }
+
+      // Cálculo do Rate of Change (ROC)
+      const roc = this.calculateROC(prices, 14);
+
+      // Cálculo do momentum usando RSI e MACD
+      const rsiMomentum = this.calculateRSIMomentum(indicators.rsi);
+      const macdMomentum = this.calculateMACDMomentum(indicators.macd);
+
+      // Análise de aceleração de preço
+      const acceleration = this.calculatePriceAcceleration(prices);
+
+      // Combinar diferentes métricas de momentum
+      const momentumStrength = this.combineMomentumMetrics({
+        roc,
+        rsiMomentum,
+        macdMomentum,
+        acceleration,
+      });
+
+      return {
+        strength: momentumStrength.strength,
+        direction: momentumStrength.direction,
+        momentum: momentumStrength.value,
+        details: {
+          roc,
+          rsiMomentum,
+          macdMomentum,
+          acceleration,
+        },
+      };
+    } catch (error) {
+      console.error("Erro ao calcular momentum:", error);
+      return {
+        strength: 0,
+        direction: "neutral",
+        momentum: 0,
+      };
+    }
+  }
+
+  calculateROC(prices, period) {
+    try {
+      if (prices.length < period + 1) {
+        return {
+          value: 0,
+          direction: "neutral",
+          strength: 0,
+        };
+      }
+
+      const currentPrice = prices[prices.length - 1];
+      const previousPrice = prices[prices.length - period - 1];
+      const roc = ((currentPrice - previousPrice) / previousPrice) * 100;
+
+      return {
+        value: roc,
+        direction: roc > 0 ? "up" : roc < 0 ? "down" : "neutral",
+        strength: Math.min(Math.abs(roc) / 2, 1), // Normalizar para 0-1
+      };
+    } catch (error) {
+      console.error("Erro ao calcular ROC:", error);
+      return {
+        value: 0,
+        direction: "neutral",
+        strength: 0,
+      };
+    }
+  }
+
+  calculateRSIMomentum(rsi) {
+    try {
+      if (!rsi || !rsi.history || rsi.history.length < 2) {
+        return {
+          value: 0,
+          direction: "neutral",
+          strength: 0,
+        };
+      }
+
+      const current = rsi.current;
+      const previous = rsi.previous;
+      const change = current - previous;
+
+      // Determinar força e direção
+      let strength = 0;
       let direction = "neutral";
-      if (currentPrice > ma20 && ma20 > ma50) {
+
+      if (current < 30) {
+        strength = (30 - current) / 30;
+        direction = "up"; // Condição de sobrevenda
+      } else if (current > 70) {
+        strength = (current - 70) / 30;
+        direction = "down"; // Condição de sobrecompra
+      } else {
+        strength = Math.abs(change) / 20; // Normalizar para 0-1
+        direction = change > 0 ? "up" : "down";
+      }
+
+      return {
+        value: change,
+        direction,
+        strength: Math.min(strength, 1),
+      };
+    } catch (error) {
+      console.error("Erro ao calcular momentum do RSI:", error);
+      return {
+        value: 0,
+        direction: "neutral",
+        strength: 0,
+      };
+    }
+  }
+
+  calculateMACDMomentum(macd) {
+    try {
+      if (!macd || !macd.histogram) {
+        return {
+          value: 0,
+          direction: "neutral",
+          strength: 0,
+        };
+      }
+
+      const histogram = macd.histogram;
+      const signal = macd.signal;
+      const macdLine = macd.value;
+
+      // Calcular força do momentum baseado na diferença MACD-Signal
+      const strength = Math.min(Math.abs(macdLine - signal) / 0.001, 1);
+
+      // Determinar direção
+      let direction = "neutral";
+      if (histogram > 0 && macdLine > signal) {
         direction = "up";
-      } else if (currentPrice < ma20 && ma20 < ma50) {
+      } else if (histogram < 0 && macdLine < signal) {
         direction = "down";
       }
 
-      // Calcular força da tendência
-      const priceVolatility = this.calculateVolatility(
-        historicalData.slice(-20)
-      );
-      const trendDeviation = Math.abs(currentPrice - ma50) / ma50;
-      const momentumStrength = this.calculateMomentumStrength(
-        historicalData.slice(-14),
-        this.calculateIndicators(historicalData).rsi,
-        this.calculateIndicators(historicalData).macd
-      );
+      return {
+        value: histogram,
+        direction,
+        strength,
+      };
+    } catch (error) {
+      console.error("Erro ao calcular momentum do MACD:", error);
+      return {
+        value: 0,
+        direction: "neutral",
+        strength: 0,
+      };
+    }
+  }
 
-      // Combinar diferentes métricas
+  calculatePriceAcceleration(prices) {
+    try {
+      if (prices.length < 3) {
+        return {
+          value: 0,
+          direction: "neutral",
+          strength: 0,
+        };
+      }
+
+      // Calcular velocidades (primeira derivada)
+      const velocities = [];
+      for (let i = 1; i < prices.length; i++) {
+        velocities.push(prices[i] - prices[i - 1]);
+      }
+
+      // Calcular acelerações (segunda derivada)
+      const accelerations = [];
+      for (let i = 1; i < velocities.length; i++) {
+        accelerations.push(velocities[i] - velocities[i - 1]);
+      }
+
+      // Pegar a aceleração mais recente
+      const currentAcceleration = accelerations[accelerations.length - 1];
+
+      // Normalizar a força
+      const strength = Math.min(Math.abs(currentAcceleration) / 0.0001, 1);
+
+      return {
+        value: currentAcceleration,
+        direction: currentAcceleration > 0 ? "up" : "down",
+        strength,
+      };
+    } catch (error) {
+      console.error("Erro ao calcular aceleração de preço:", error);
+      return {
+        value: 0,
+        direction: "neutral",
+        strength: 0,
+      };
+    }
+  }
+
+  combineMomentumMetrics(metrics) {
+    try {
+      const { roc, rsiMomentum, macdMomentum, acceleration } = metrics;
+
+      // Pesos para cada métrica
+      const weights = {
+        roc: 0.25,
+        rsi: 0.25,
+        macd: 0.3,
+        acceleration: 0.2,
+      };
+
+      // Calcular força ponderada
       const strength =
-        trendDeviation * 0.4 +
-        momentumStrength * 0.4 +
-        Math.min(priceVolatility * 10, 1) * 0.2;
+        roc.strength * weights.roc +
+        rsiMomentum.strength * weights.rsi +
+        macdMomentum.strength * weights.macd +
+        acceleration.strength * weights.acceleration;
 
-      // Calcular consistência
-      const consistency = this.calculateTrendConsistency(
-        historicalData,
-        direction
-      );
+      // Determinar direção baseada em maioria
+      const directions = [
+        { dir: roc.direction, weight: weights.roc },
+        { dir: rsiMomentum.direction, weight: weights.rsi },
+        { dir: macdMomentum.direction, weight: weights.macd },
+        { dir: acceleration.direction, weight: weights.acceleration },
+      ];
+
+      const direction = this.getWeightedDirection(directions);
+
+      // Calcular valor final do momentum
+      const value =
+        roc.value * weights.roc +
+        rsiMomentum.value * weights.rsi +
+        macdMomentum.value * weights.macd +
+        acceleration.value * weights.acceleration;
 
       return {
         strength: Math.min(strength, 1),
         direction,
-        consistency,
+        value,
       };
     } catch (error) {
-      console.error("Erro ao analisar força da tendência:", error);
+      console.error("Erro ao combinar métricas de momentum:", error);
       return {
         strength: 0,
         direction: "neutral",
-        consistency: 0,
-      };
-    }
-  }
-  // Função para calcular consistência da tendência
-  calculateTrendConsistency(prices, direction) {
-    try {
-      const periods = [5, 10, 20];
-      let consistentPeriods = 0;
-
-      periods.forEach((period) => {
-        const slice = prices.slice(-period);
-        const start = slice[0];
-        const end = slice[slice.length - 1];
-
-        if (direction === "up" && end > start) {
-          consistentPeriods++;
-        } else if (direction === "down" && end < start) {
-          consistentPeriods++;
-        }
-      });
-
-      return consistentPeriods / periods.length;
-    } catch (error) {
-      console.error("Erro ao calcular consistência da tendência:", error);
-      return 0;
-    }
-  }
-
-  // Função auxiliar para calcular média móvel
-  calculateMA(prices, period) {
-    const ma = [];
-    for (let i = period - 1; i < prices.length; i++) {
-      const sum = prices
-        .slice(i - period + 1, i + 1)
-        .reduce((a, b) => a + b, 0);
-      ma.push(sum / period);
-    }
-    return ma;
-  }
-  // Atualizar a função analyzeMarketConditions para usar os novos cálculos
-  analyzeMarketConditions(historicalData) {
-    try {
-      const volatility = this.calculateVolatility(historicalData);
-      const trend = this.analyzeTrendStrength(historicalData);
-      const volume = this.analyzeVolumeProfile(historicalData);
-
-      const conditions = {
-        volatility: {
-          value: volatility,
-          isGood: volatility < 0.02,
-        },
-        trend: {
-          ...trend,
-          isGood: trend.strength > 0.6 && trend.consistency > 0.7,
-        },
-        volume: {
-          ...volume,
-          isGood: volume.isAdequate && volume.ratio > 0.8,
-        },
-      };
-
-      const isFavorable =
-        conditions.volatility.isGood &&
-        conditions.trend.isGood &&
-        conditions.volume.isGood;
-
-      return {
-        isFavorable,
-        conditions,
-        overallScore:
-          ((conditions.volatility.isGood ? 1 : 0) +
-            (conditions.trend.isGood ? 1 : 0) +
-            (conditions.volume.isGood ? 1 : 0)) /
-          3,
-      };
-    } catch (error) {
-      console.error("Erro ao analisar condições de mercado:", error);
-      return {
-        isFavorable: false,
-        conditions: {
-          volatility: { isGood: false },
-          trend: { isGood: false },
-          volume: { isGood: false },
-        },
-        overallScore: 0,
+        value: 0,
       };
     }
   }
 
-  findNearestLevel(price, levels) {
-    return levels.reduce((nearest, level) => {
-      const currentDiff = Math.abs(price - level);
-      const nearestDiff = Math.abs(price - nearest);
-      return currentDiff < nearestDiff ? level : nearest;
+  getWeightedDirection(directions) {
+    const weights = {
+      up: 0,
+      down: 0,
+      neutral: 0,
+    };
+
+    directions.forEach(({ dir, weight }) => {
+      weights[dir] += weight;
     });
+
+    return Object.entries(weights).reduce((a, b) =>
+      weights[a] > weights[b[0]] ? a : b[0]
+    );
   }
 
-  calculateEntryPoints(currentPrice, trend, support, resistance) {
-    const volatility = this.calculateVolatility([
-      support,
-      resistance,
-      currentPrice,
-    ]);
-
-    return {
-      suggested: currentPrice,
-      conservative:
-        trend.direction === "up"
-          ? currentPrice * (1 - volatility)
-          : currentPrice * (1 + volatility),
-      aggressive:
-        trend.direction === "up"
-          ? currentPrice * (1 + volatility * 0.5)
-          : currentPrice * (1 - volatility * 0.5),
-    };
-  }
-
-  calculateStopLevels(prices, direction, entryPoints) {
-    const atr = this.calculateATR(prices);
-
-    return {
-      tight:
-        direction === "up"
-          ? entryPoints.suggested * (1 - atr)
-          : entryPoints.suggested * (1 + atr),
-      normal:
-        direction === "up"
-          ? entryPoints.suggested * (1 - atr * 1.5)
-          : entryPoints.suggested * (1 + atr * 1.5),
-      wide:
-        direction === "up"
-          ? entryPoints.suggested * (1 - atr * 2)
-          : entryPoints.suggested * (1 + atr * 2),
-    };
-  }
-  calculateATR(prices, period = 14) {
-    const trueRanges = [];
-
-    for (let i = 1; i < prices.length; i++) {
-      const high = prices[i];
-      const low = prices[i];
-      const previousClose = prices[i - 1];
-
-      const tr1 = high - low;
-      const tr2 = Math.abs(high - previousClose);
-      const tr3 = Math.abs(low - previousClose);
-
-      trueRanges.push(Math.max(tr1, tr2, tr3));
-    }
-
-    return trueRanges.slice(-period).reduce((a, b) => a + b, 0) / period;
-  }
-  calculateTrendStrength(trends, indicators, volumes) {
+  validateTrendStrength(analysis) {
     try {
-      // Análise de força baseada em múltiplos fatores
-      const priceStrength = this.calculatePriceStrength(trends);
-      const indicatorStrength = this.calculateIndicatorStrength(indicators);
-      const volumeStrength = this.calculateVolumeStrength(volumes);
-      const momentumStrength = this.calculateOverallMomentum(indicators);
-
-      // Pesos para cada componente
-      const weights = {
-        price: 0.35,
-        indicators: 0.3,
-        volume: 0.2,
-        momentum: 0.15,
-      };
-
-      // Cálculo ponderado da força total
-      const totalStrength =
-        priceStrength * weights.price +
-        indicatorStrength * weights.indicators +
-        volumeStrength * weights.volume +
-        momentumStrength * weights.momentum;
-
-      // Análise de consistência
-      const consistency = this.analyzeTrendConsistency(trends, indicators);
-
-      // Ajuste final baseado na consistência
-      const adjustedStrength = totalStrength * consistency;
-
-      return {
-        strength: Math.min(adjustedStrength, 1),
-        components: {
-          price: priceStrength,
-          indicators: indicatorStrength,
-          volume: volumeStrength,
-          momentum: momentumStrength,
-        },
-        consistency,
-      };
-    } catch (error) {
-      console.error("Erro ao calcular força da tendência:", error);
-      return {
-        strength: 0,
-        components: {
-          price: 0,
-          indicators: 0,
-          volume: 0,
-          momentum: 0,
-        },
-        consistency: 0,
-      };
-    }
-  }
-
-  calculatePriceStrength(trends) {
-    try {
-      const { short, medium, long } = trends;
-
-      // Verificar alinhamento das tendências
-      const alignment = this.checkTrendAlignment(short, medium, long);
-
-      // Calcular força baseada na direção e consistência
-      const shortStrength = Math.abs(short.strength || 0);
-      const mediumStrength = Math.abs(medium.strength || 0);
-      const longStrength = Math.abs(long.strength || 0);
-
-      // Pesos diferentes para cada timeframe
-      const weightedStrength =
-        shortStrength * 0.2 + mediumStrength * 0.3 + longStrength * 0.5;
-
-      // Ajuste baseado no alinhamento
-      return weightedStrength * alignment;
-    } catch (error) {
-      console.error("Erro ao calcular força do preço:", error);
-      return 0;
-    }
-  }
-
-  calculateIndicatorStrength(indicators) {
-    try {
-      const { rsi, macd, bollinger } = indicators;
-
-      // Força do RSI
-      const rsiStrength = this.calculateRSIStrength(rsi);
-
-      // Força do MACD
-      const macdStrength = this.calculateMACDStrength(macd);
-
-      // Força das Bandas de Bollinger
-      const bollingerStrength = this.calculateBollingerStrength(bollinger);
-
-      // Combinar indicadores com pesos
-      return rsiStrength * 0.3 + macdStrength * 0.4 + bollingerStrength * 0.3;
-    } catch (error) {
-      console.error("Erro ao calcular força dos indicadores:", error);
-      return 0;
-    }
-  }
-
-  calculateRSIStrength(rsi) {
-    const lastRSI = rsi[rsi.length - 1];
-
-    if (lastRSI <= 30) {
-      return (30 - lastRSI) / 30; // Força para tendência de alta
-    } else if (lastRSI >= 70) {
-      return (lastRSI - 70) / 30; // Força para tendência de baixa
-    } else {
-      return Math.abs(50 - lastRSI) / 50; // Força neutra
-    }
-  }
-
-  calculateMACDStrength(macd) {
-    const recent = macd.slice(-5);
-    const lastMACD = recent[recent.length - 1];
-
-    // Calcular força baseada na diferença entre MACD e Signal
-    const difference = Math.abs(lastMACD.MACD - lastMACD.signal);
-    const maxDiff = Math.max(...recent.map((m) => Math.abs(m.MACD - m.signal)));
-
-    return difference / maxDiff;
-  }
-
-  calculateBollingerStrength(bollinger) {
-    const latest = bollinger[bollinger.length - 1];
-    const price = latest.price || latest.middle;
-
-    // Calcular posição relativa nas bandas
-    const bandwidth = latest.upper - latest.lower;
-    const position = (price - latest.lower) / bandwidth;
-
-    // Retornar força baseada na posição
-    if (position <= 0.2) return 1 - position; // Próximo da banda inferior
-    if (position >= 0.8) return position; // Próximo da banda superior
-    return 0.5 - Math.abs(0.5 - position); // Força média
-  }
-
-  calculateVolumeStrength(volumes) {
-    const { current, average, trend } = volumes;
-
-    // Força baseada no volume atual vs média
-    const volumeRatio = current / average;
-
-    // Ajuste baseado na tendência do volume
-    const trendMultiplier =
-      trend === "increasing" ? 1.2 : trend === "decreasing" ? 0.8 : 1;
-
-    return Math.min(volumeRatio * trendMultiplier, 1);
-  }
-
-  calculateOverallMomentum(indicators) {
-    const rsiMomentum = this.calculateRSIMomentum(indicators.rsi);
-    const macdMomentum = this.calculateMACDMomentum(indicators.macd);
-
-    return (rsiMomentum + macdMomentum) / 2;
-  }
-
-  calculateRSIMomentum(rsi) {
-    const recent = rsi.slice(-5);
-    const change = recent[recent.length - 1] - recent[0];
-    return Math.min(Math.abs(change) / 50, 1);
-  }
-
-  calculateMACDMomentum(macd) {
-    const recent = macd.slice(-5);
-    const histogramChange =
-      recent[recent.length - 1].histogram - recent[0].histogram;
-    return Math.min(Math.abs(histogramChange) / 0.001, 1);
-  }
-
-  analyzeTrendConsistency(trends, indicators) {
-    try {
-      if (!trends || !indicators) {
-        console.warn("Dados insuficientes para análise de consistência");
-        return 0;
+      // Verificar força mínima da tendência
+      if (
+        !analysis.strength ||
+        analysis.strength < this.config.trendStrengthMin
+      ) {
+        return false;
       }
 
-      const directions = [];
-
-      // Adicionar direções das tendências se disponíveis
-      if (trends.short?.direction) directions.push(trends.short.direction);
-      if (trends.medium?.direction) directions.push(trends.medium.direction);
-      if (trends.long?.direction) directions.push(trends.long.direction);
-
-      // Adicionar direção dos indicadores se disponível
-      const indicatorDirection = this.getIndicatorDirection(indicators);
-      if (indicatorDirection) directions.push(indicatorDirection);
-
-      if (directions.length === 0) {
-        console.warn("Nenhuma direção disponível para análise");
-        return 0;
+      // Verificar alinhamento de diferentes timeframes
+      if (analysis.details?.trends?.alignment) {
+        const alignment = analysis.details.trends.alignment;
+        if (!alignment.isAligned || alignment.strength < 0.7) {
+          return false;
+        }
       }
 
-      const mainDirection = this.getMajorityDirection(directions);
-      const consistentCount = directions.filter(
-        (d) => d === mainDirection
+      return true;
+    } catch (error) {
+      console.error("Erro na validação da força da tendência:", error);
+      return false;
+    }
+  }
+
+  validateIndicators(indicators) {
+    try {
+      if (!indicators) return false;
+
+      // Validar RSI
+      const rsiValid = this.validateRSI(indicators.rsi);
+
+      // Validar MACD
+      const macdValid = this.validateMACD(indicators.macd);
+
+      // Validar Bollinger Bands
+      const bollingerValid = this.validateBollinger(indicators.bollinger);
+
+      // Exigir que pelo menos 2 dos 3 indicadores confirmem
+      const validCount = [rsiValid, macdValid, bollingerValid].filter(
+        Boolean
       ).length;
 
-      return consistentCount / directions.length;
+      return validCount >= 2;
     } catch (error) {
-      console.error("Erro na análise de consistência:", error);
+      console.error("Erro na validação dos indicadores:", error);
+      return false;
+    }
+  }
+
+  validateRSI(rsi) {
+    if (!rsi || !rsi.current) return false;
+
+    // Verificar condições de sobrecompra/sobrevenda
+    if (rsi.current > 70) {
+      return rsi.trend === "down";
+    }
+    if (rsi.current < 30) {
+      return rsi.trend === "up";
+    }
+
+    // Verificar tendência do RSI
+    return Math.abs(rsi.current - 50) > 10;
+  }
+
+  validateMACD(macd) {
+    if (!macd) return false;
+
+    // Verificar cruzamento significativo
+    const significantCrossover = Math.abs(macd.value - macd.signal) > 0.0001;
+
+    // Verificar direção do histograma
+    const positiveHistogram = macd.histogram > 0;
+
+    return significantCrossover && positiveHistogram;
+  }
+
+  validateBollinger(bollinger) {
+    if (!bollinger) return false;
+
+    // Verificar posição do preço em relação às bandas
+    const percentB = bollinger.percentB;
+
+    // Validar sinais de reversão nas bandas
+    if (percentB < 0.05) return true; // Próximo à banda inferior
+    if (percentB > 0.95) return true; // Próximo à banda superior
+
+    return false;
+  }
+
+  validateMarketConditions(details) {
+    try {
+      if (!details || !details.market) return false;
+
+      const { volume, volatility } = details.market.details;
+
+      // Validar volume
+      if (volume < 0.7) {
+        // Volume deve ser pelo menos 70% da média
+        return false;
+      }
+
+      // Validar volatilidade
+      if (volatility > this.config.volatilityThreshold) {
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Erro na validação das condições de mercado:", error);
+      return false;
+    }
+  }
+
+  validatePricePatterns(patterns) {
+    try {
+      if (!patterns) return true; // Padrões não são obrigatórios
+
+      // Se houver padrões, verificar a confiabilidade
+      if (patterns.reliability < 0.7) {
+        return false;
+      }
+
+      // Verificar força do padrão
+      if (patterns.strength < 0.7) {
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Erro na validação dos padrões de preço:", error);
+      return true; // Em caso de erro, não bloquear por padrões
+    }
+  }
+
+  validateAnalysis(analysis) {
+    try {
+      if (!analysis || typeof analysis !== "object") {
+        return false;
+      }
+
+      // Reduzir threshold de confiança
+      if (!analysis.confidence || analysis.confidence < 0.6) {
+        return false;
+      }
+
+      // Reduzir threshold de força
+      if (!analysis.strength || analysis.strength < 0.01) {
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Erro na validação da análise:", error);
+      return false;
+    }
+  }
+  normalizeSignalStrength(strength, type) {
+    const multipliers = {
+      rsi: 1.2,
+      macd: 1000,
+      bollinger: 1.5,
+      ema: 100,
+    };
+
+    return Math.min(strength * (multipliers[type] || 1), 1);
+  }
+
+  validateTrendStrength(analysis) {
+    try {
+      // Verificar força mínima da tendência
+      if (
+        !analysis.strength ||
+        analysis.strength < this.config.trendStrengthMin
+      ) {
+        return false;
+      }
+
+      // Verificar alinhamento de diferentes timeframes
+      if (analysis.details?.trends?.alignment) {
+        const alignment = analysis.details.trends.alignment;
+        if (!alignment.isAligned || alignment.strength < 0.7) {
+          return false;
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Erro na validação da força da tendência:", error);
+      return false;
+    }
+  }
+
+  validateIndicators(indicators) {
+    try {
+      if (!indicators) return false;
+
+      // Validar RSI
+      const rsiValid = this.validateRSI(indicators.rsi);
+
+      // Validar MACD
+      const macdValid = this.validateMACD(indicators.macd);
+
+      // Validar Bollinger Bands
+      const bollingerValid = this.validateBollinger(indicators.bollinger);
+
+      // Exigir que pelo menos 2 dos 3 indicadores confirmem
+      const validCount = [rsiValid, macdValid, bollingerValid].filter(
+        Boolean
+      ).length;
+
+      return validCount >= 2;
+    } catch (error) {
+      console.error("Erro na validação dos indicadores:", error);
+      return false;
+    }
+  }
+
+  validateRSI(rsi) {
+    if (!rsi || !rsi.current) return false;
+
+    // Verificar condições de sobrecompra/sobrevenda
+    if (rsi.current > 70) {
+      return rsi.trend === "down";
+    }
+    if (rsi.current < 30) {
+      return rsi.trend === "up";
+    }
+
+    // Verificar tendência do RSI
+    return Math.abs(rsi.current - 50) > 10;
+  }
+
+  validateMACD(macd) {
+    if (!macd) return false;
+
+    // Verificar cruzamento significativo
+    const significantCrossover = Math.abs(macd.value - macd.signal) > 0.0001;
+
+    // Verificar direção do histograma
+    const positiveHistogram = macd.histogram > 0;
+
+    return significantCrossover && positiveHistogram;
+  }
+
+  validateBollinger(bollinger) {
+    if (!bollinger) return false;
+
+    // Verificar posição do preço em relação às bandas
+    const percentB = bollinger.percentB;
+
+    // Validar sinais de reversão nas bandas
+    if (percentB < 0.05) return true; // Próximo à banda inferior
+    if (percentB > 0.95) return true; // Próximo à banda superior
+
+    return false;
+  }
+
+  validateMarketConditions(details) {
+    try {
+      if (!details || !details.market) return false;
+
+      const { volume, volatility } = details.market.details;
+
+      // Validar volume
+      if (volume < 0.7) {
+        // Volume deve ser pelo menos 70% da média
+        return false;
+      }
+
+      // Validar volatilidade
+      if (volatility > this.config.volatilityThreshold) {
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Erro na validação das condições de mercado:", error);
+      return false;
+    }
+  }
+
+  validatePricePatterns(patterns) {
+    try {
+      if (!patterns) return true; // Padrões não são obrigatórios
+
+      // Se houver padrões, verificar a confiabilidade
+      if (patterns.reliability < 0.7) {
+        return false;
+      }
+
+      // Verificar força do padrão
+      if (patterns.strength < 0.7) {
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Erro na validação dos padrões de preço:", error);
+      return true; // Em caso de erro, não bloquear por padrões
+    }
+  }
+
+  validateTrendStrength(analysis) {
+    try {
+      // Verificar força mínima da tendência
+      if (
+        !analysis.strength ||
+        analysis.strength < this.config.trendStrengthMin
+      ) {
+        return false;
+      }
+
+      // Verificar alinhamento de diferentes timeframes
+      if (analysis.details?.trends?.alignment) {
+        const alignment = analysis.details.trends.alignment;
+        if (!alignment.isAligned || alignment.strength < 0.7) {
+          return false;
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Erro na validação da força da tendência:", error);
+      return false;
+    }
+  }
+
+  validateIndicators(indicators) {
+    try {
+      if (!indicators) return false;
+
+      // Validar RSI
+      const rsiValid = this.validateRSI(indicators.rsi);
+
+      // Validar MACD
+      const macdValid = this.validateMACD(indicators.macd);
+
+      // Validar Bollinger Bands
+      const bollingerValid = this.validateBollinger(indicators.bollinger);
+
+      // Exigir que pelo menos 2 dos 3 indicadores confirmem
+      const validCount = [rsiValid, macdValid, bollingerValid].filter(
+        Boolean
+      ).length;
+
+      return validCount >= 2;
+    } catch (error) {
+      console.error("Erro na validação dos indicadores:", error);
+      return false;
+    }
+  }
+
+  validateRSI(rsi) {
+    if (!rsi || !rsi.current) return false;
+
+    // Verificar condições de sobrecompra/sobrevenda
+    if (rsi.current > 70) {
+      return rsi.trend === "down";
+    }
+    if (rsi.current < 30) {
+      return rsi.trend === "up";
+    }
+
+    // Verificar tendência do RSI
+    return Math.abs(rsi.current - 50) > 10;
+  }
+
+  validateMACD(macd) {
+    if (!macd) return false;
+
+    // Verificar cruzamento significativo
+    const significantCrossover = Math.abs(macd.value - macd.signal) > 0.0001;
+
+    // Verificar direção do histograma
+    const positiveHistogram = macd.histogram > 0;
+
+    return significantCrossover && positiveHistogram;
+  }
+
+  validateBollinger(bollinger) {
+    if (!bollinger) return false;
+
+    // Verificar posição do preço em relação às bandas
+    const percentB = bollinger.percentB;
+
+    // Validar sinais de reversão nas bandas
+    if (percentB < 0.05) return true; // Próximo à banda inferior
+    if (percentB > 0.95) return true; // Próximo à banda superior
+
+    return false;
+  }
+
+  validateMarketConditions(details) {
+    try {
+      if (!details || !details.market) return false;
+
+      const { volume, volatility } = details.market.details;
+
+      // Validar volume
+      if (volume < 0.7) {
+        // Volume deve ser pelo menos 70% da média
+        return false;
+      }
+
+      // Validar volatilidade
+      if (volatility > this.config.volatilityThreshold) {
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Erro na validação das condições de mercado:", error);
+      return false;
+    }
+  }
+
+  validatePricePatterns(patterns) {
+    try {
+      if (!patterns) return true; // Padrões não são obrigatórios
+
+      // Se houver padrões, verificar a confiabilidade
+      if (patterns.reliability < 0.7) {
+        return false;
+      }
+
+      // Verificar força do padrão
+      if (patterns.strength < 0.7) {
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Erro na validação dos padrões de preço:", error);
+      return true; // Em caso de erro, não bloquear por padrões
+    }
+  }
+
+  determineDirectionFromSignals(signals) {
+    if (!signals || signals.length === 0) return "neutral";
+
+    const validSignals = signals.filter(
+      (signal) => signal && typeof signal === "object" && signal.direction
+    );
+
+    const directions = {
+      up: 0,
+      down: 0,
+      neutral: 0,
+    };
+
+    const weights = {
+      rsi: 0.35,    // Aumentado
+      macd: 0.30,   // Mantido
+      bollinger: 0.20, // Reduzido
+      ema: 0.15     // Reduzido
+    };
+    
+    validSignals.forEach((signal, index) => {
+      const weight = weights[signal.type] || 0.25;
+      directions[signal.direction] += weight * (signal.strength || 1);
+    });
+
+    return this.getStrongestDirection(directions);
+  }
+  getStrongestDirection(directions) {
+    const totalWeight = Object.values(directions).reduce((a, b) => a + b, 0);
+    if (totalWeight === 0) return "neutral";
+
+    const threshold = 0.6;
+    for (const [direction, weight] of Object.entries(directions)) {
+      if (weight / totalWeight > threshold) {
+        return direction;
+      }
+    }
+
+    return "neutral";
+  }
+
+  determineOverallDirection(signals) {
+    try {
+      // Para sinais dos indicadores
+      if (Array.isArray(signals)) {
+        return this.determineDirectionFromSignals(signals);
+      }
+
+      // Para objeto de direções
+      if (signals && typeof signals === "object") {
+        return this.determineDirectionFromTrends(signals);
+      }
+
+      return "neutral";
+    } catch (error) {
+      console.error("Erro ao determinar direção geral:", error);
+      return "neutral";
+    }
+  }
+  determineDirectionFromTrends(trends) {
+    const { indicators, trend } = trends;
+
+    if (!indicators || !trend) return "neutral";
+
+    const directions = {
+      up: 0,
+      down: 0,
+      neutral: 0,
+    };
+
+    // Peso dos indicadores
+    if (indicators) directions[indicators] += 0.6;
+
+    // Peso da tendência
+    if (trend) directions[trend] += 0.4;
+
+    return this.getStrongestDirection(directions);
+  }
+  calculatePatternStrength(patterns) {
+    try {
+      if (!patterns) return 0;
+
+      let totalStrength = 0;
+      let patternCount = 0;
+      let reliability = 0;
+
+      // Avaliar padrões de reversão
+      if (patterns.doubleTop) {
+        totalStrength += this.evaluateDoubleTop(patterns.doubleTop);
+        patternCount++;
+      }
+      if (patterns.doubleBottom) {
+        totalStrength += this.evaluateDoubleBottom(patterns.doubleBottom);
+        patternCount++;
+      }
+      if (patterns.headAndShoulders) {
+        totalStrength += this.evaluateHeadAndShoulders(
+          patterns.headAndShoulders
+        );
+        patternCount++;
+      }
+
+      // Avaliar padrões de continuação
+      if (patterns.triangles) {
+        const triangleStrength = this.evaluateTriangles(patterns.triangles);
+        if (triangleStrength > 0) {
+          totalStrength += triangleStrength;
+          patternCount++;
+        }
+      }
+
+      // Calcular força média e confiabilidade
+      if (patternCount === 0) return 0;
+
+      const averageStrength = totalStrength / patternCount;
+      reliability = this.calculatePatternReliability(patterns, patternCount);
+
+      // Retornar força ajustada pela confiabilidade
+      return averageStrength * reliability;
+    } catch (error) {
+      console.error("Erro ao calcular força dos padrões:", error);
       return 0;
     }
   }
 
-  checkTrendAlignment(short, medium, long) {
-    if (!short || !medium || !long) return 0;
+  evaluateDoubleTop(pattern) {
+    if (!pattern.found) return 0;
 
-    const directions = [short.direction, medium.direction, long.direction];
-    const aligned = directions.every((d) => d === directions[0]);
+    try {
+      // Calcular distância entre topos
+      const peakDistance = Math.abs(pattern.index2 - pattern.index1);
+      const priceDifference =
+        Math.abs(pattern.price2 - pattern.price1) / pattern.price1;
 
-    if (aligned) return 1;
+      // Fatores de qualidade
+      const idealDistance = 20; // Distância ideal entre topos
+      const maxPriceDiff = 0.001; // Diferença máxima aceitável de preço
 
-    // Retornar valor parcial baseado no alinhamento parcial
-    const mainDirection = this.getMajorityDirection(directions);
-    const alignedCount = directions.filter((d) => d === mainDirection).length;
+      // Calcular pontuação
+      let strength = 1;
 
-    return alignedCount / directions.length;
+      // Ajustar baseado na distância
+      strength *= Math.min(peakDistance / idealDistance, 1);
+
+      // Ajustar baseado na diferença de preço
+      strength *= 1 - priceDifference / maxPriceDiff;
+
+      return Math.max(Math.min(strength, 1), 0);
+    } catch (error) {
+      console.error("Erro ao avaliar Double Top:", error);
+      return 0;
+    }
   }
 
-  getIndicatorDirection(indicators) {
+  evaluateDoubleBottom(pattern) {
+    if (!pattern.found) return 0;
+
     try {
-      if (
-        !indicators ||
-        !indicators.rsi ||
-        !indicators.macd ||
-        !indicators.bollinger
-      ) {
-        console.warn("Indicadores incompletos para determinar direção");
-        return "neutral";
+      // Similar ao Double Top
+      const troughDistance = Math.abs(pattern.index2 - pattern.index1);
+      const priceDifference =
+        Math.abs(pattern.price2 - pattern.price1) / pattern.price1;
+
+      const idealDistance = 20;
+      const maxPriceDiff = 0.001;
+
+      let strength = 1;
+      strength *= Math.min(troughDistance / idealDistance, 1);
+      strength *= 1 - priceDifference / maxPriceDiff;
+
+      return Math.max(Math.min(strength, 1), 0);
+    } catch (error) {
+      console.error("Erro ao avaliar Double Bottom:", error);
+      return 0;
+    }
+  }
+
+  evaluateHeadAndShoulders(pattern) {
+    if (!pattern.found) return 0;
+
+    try {
+      const { leftShoulder, head, rightShoulder } = pattern;
+
+      // Verificar simetria
+      const leftHeight = Math.abs(head.price - leftShoulder.price);
+      const rightHeight = Math.abs(head.price - rightShoulder.price);
+      const heightDiff = Math.abs(leftHeight - rightHeight) / leftHeight;
+
+      // Verificar espaçamento
+      const leftSpan = head.index - leftShoulder.index;
+      const rightSpan = rightShoulder.index - head.index;
+      const spanDiff = Math.abs(leftSpan - rightSpan) / leftSpan;
+
+      // Calcular força baseada na simetria e espaçamento
+      let strength = 1;
+      strength *= 1 - heightDiff;
+      strength *= 1 - spanDiff;
+
+      return Math.max(Math.min(strength, 1), 0);
+    } catch (error) {
+      console.error("Erro ao avaliar Head and Shoulders:", error);
+      return 0;
+    }
+  }
+
+  evaluateTriangles(triangles) {
+    try {
+      let maxStrength = 0;
+
+      // Avaliar cada tipo de triângulo
+      if (triangles.ascending.found) {
+        maxStrength = Math.max(
+          maxStrength,
+          this.evaluateAscendingTriangle(triangles.ascending)
+        );
+      }
+      if (triangles.descending.found) {
+        maxStrength = Math.max(
+          maxStrength,
+          this.evaluateDescendingTriangle(triangles.descending)
+        );
+      }
+      if (triangles.symmetric.found) {
+        maxStrength = Math.max(
+          maxStrength,
+          this.evaluateSymmetricTriangle(triangles.symmetric)
+        );
       }
 
-      const rsiDirection = this.getRSIDirection(indicators.rsi);
-      const macdDirection = this.getMACDDirection(indicators.macd);
-      const bollingerDirection = this.getBollingerDirection(
-        indicators.bollinger
+      return maxStrength;
+    } catch (error) {
+      console.error("Erro ao avaliar triângulos:", error);
+      return 0;
+    }
+  }
+
+  evaluateAscendingTriangle(triangle) {
+    if (!triangle.found) return 0;
+
+    try {
+      // Verificar qualidade da linha de resistência
+      const resistanceQuality = Math.min(
+        1,
+        Math.abs(triangle.resistance.slope)
       );
 
-      const directions = [
-        rsiDirection,
-        macdDirection,
-        bollingerDirection,
-      ].filter((direction) => direction !== undefined);
+      // Verificar inclinação da linha de suporte
+      const supportSlope = triangle.support.slope;
+      const slopeQuality =
+        supportSlope > 0 ? Math.min(supportSlope * 1000, 1) : 0;
 
-      if (directions.length === 0) {
-        return "neutral";
+      return (resistanceQuality + slopeQuality) / 2;
+    } catch (error) {
+      console.error("Erro ao avaliar triângulo ascendente:", error);
+      return 0;
+    }
+  }
+
+  evaluateDescendingTriangle(triangle) {
+    if (!triangle.found) return 0;
+
+    try {
+      // Similar ao ascendente, mas invertido
+      const supportQuality = Math.min(1, Math.abs(triangle.support.slope));
+      const resistanceSlope = triangle.resistance.slope;
+      const slopeQuality =
+        resistanceSlope < 0 ? Math.min(Math.abs(resistanceSlope * 1000), 1) : 0;
+
+      return (supportQuality + slopeQuality) / 2;
+    } catch (error) {
+      console.error("Erro ao avaliar triângulo descendente:", error);
+      return 0;
+    }
+  }
+
+  evaluateSymmetricTriangle(triangle) {
+    if (!triangle.found) return 0;
+
+    try {
+      // Verificar convergência das linhas
+      const resistanceSlope = Math.abs(triangle.resistance.slope);
+      const supportSlope = Math.abs(triangle.support.slope);
+
+      // Verificar simetria
+      const slopeDiff = Math.abs(resistanceSlope - supportSlope);
+      const symmetryQuality =
+        1 - Math.min(slopeDiff / Math.max(resistanceSlope, supportSlope), 1);
+
+      return symmetryQuality;
+    } catch (error) {
+      console.error("Erro ao avaliar triângulo simétrico:", error);
+      return 0;
+    }
+  }
+
+  calculatePatternReliability(patterns, patternCount) {
+    try {
+      // Fatores de confiabilidade base para cada tipo de padrão
+      const reliabilityFactors = {
+        doubleTop: 0.85,
+        doubleBottom: 0.85,
+        headAndShoulders: 0.9,
+        triangles: 0.8,
+      };
+
+      let totalReliability = 0;
+
+      // Somar confiabilidade de cada padrão encontrado
+      if (patterns.doubleTop?.found) {
+        totalReliability += reliabilityFactors.doubleTop;
+      }
+      if (patterns.doubleBottom?.found) {
+        totalReliability += reliabilityFactors.doubleBottom;
+      }
+      if (patterns.headAndShoulders?.found) {
+        totalReliability += reliabilityFactors.headAndShoulders;
+      }
+      if (
+        patterns.triangles?.ascending.found ||
+        patterns.triangles?.descending.found ||
+        patterns.triangles?.symmetric.found
+      ) {
+        totalReliability += reliabilityFactors.triangles;
       }
 
-      return this.getMajorityDirection(directions);
+      // Calcular média de confiabilidade
+      return patternCount > 0 ? totalReliability / patternCount : 0;
     } catch (error) {
-      console.error("Erro ao obter direção dos indicadores:", error);
-      return "neutral";
+      console.error("Erro ao calcular confiabilidade dos padrões:", error);
+      return 0;
     }
   }
 }

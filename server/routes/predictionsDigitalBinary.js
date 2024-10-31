@@ -4,311 +4,361 @@ const path = require("path");
 const db = require("../config/database");
 const MarketAnalyzer = require("../services/MarketAnalyzer");
 const NotificationService = require("../services/NotificationService");
-const RiskManager = require("../models/RiskManager");
 const moment = require("moment");
-const app = express.Router();
-const riskManager = new RiskManager(1000); // Saldo inicial de 1000
 
-const symbols = [
-  "frxAUDCAD",
-  "frxAUDCHF",
-  "frxAUDJPY",
-  "frxAUDNZD",
-  "frxAUDUSD",
-  "frxEURAUD",
-  "frxEURCAD",
-  "frxEURCHF",
-  "frxEURGBP",
-  "frxEURJPY",
-  "frxEURNZD",
-  "frxEURUSD",
-  "frxGBPAUD",
-  "frxGBPCAD",
-  "frxGBPCHF",
-  "frxGBPJPY",
-  "frxGBPNZD",
-  "frxGBPUSD",
-  "frxNZDJPY",
-  "frxUSDSEK",
-  "frxUSDCAD",
-  "frxUSDJPY",
-  "frxUSDMXN",
-  "frxUSDNOK",
-  "frxUSDPLN",
-];
+class PredictionsManager {
+  constructor() {
+    this.app = express.Router();
+    this.setupRoutes();
+    this.symbolData = new Map();
+    this.activeConnections = new Set();
+    this.minDataPoints = 100;
+    this.signalTimeout = 300000; // 5 minutos
+    
+    // Configurações
+    this.config = {
+      minConfidence: 0.95,
+      minConsecutiveTicks: 30,
+      maxSignalsPerSymbol: 3,
+      signalCooldown: 300000, // 5 minutos entre sinais do mesmo par
+      volatilityThreshold: 0.002
+    };
 
-const symbolData = {};
+    // Pares de moedas suportados
+    this.symbols = [
+      "frxAUDCAD", "frxAUDCHF", "frxAUDJPY", "frxAUDNZD", "frxAUDUSD",
+      "frxEURAUD", "frxEURCAD", "frxEURCHF", "frxEURGBP", "frxEURJPY",
+      "frxEURNZD", "frxEURUSD", "frxGBPAUD", "frxGBPCAD", "frxGBPCHF",
+      "frxGBPJPY", "frxGBPNZD", "frxGBPUSD", "frxNZDJPY", "frxUSDCAD",
+      "frxUSDCHF", "frxUSDJPY", "frxUSDNOK", "frxUSDSEK"
+    ];
+  }
 
-symbols.forEach((symbol) => {
-  symbolData[symbol] = {
-    ticks: [],
-    signals: [],
-    analysis: {},
-    performance: {
-      wins: 0,
-      losses: 0,
-      totalTrades: 0,
-    },
-  };
-});
+  setupRoutes() {
+    this.app.get("/signals", this.getActiveSignals.bind(this));
+    this.app.get("/performance", this.getPerformanceMetrics.bind(this));
+    this.app.get("/", (req, res) => {
+      res.sendFile(path.join(__dirname, "../../client", "index.html"));
+    });
+  }
 
-async function processMarketData(symbol, tick) {
-  try {
-    const data = symbolData[symbol];
-    data.ticks.push(tick);
+  initialize() {
+    this.initializeSymbolData();
+    this.connectWebSocket();
+    this.startMonitoring();
+    console.log("PredictionsManager inicializado");
+  }
 
-    // Log para verificar os ticks
-    console.log(
-      `Processando dados para ${symbol}. Ticks acumulados: ${data.ticks.length}`
-    );
+  initializeSymbolData() {
+    this.symbols.forEach(symbol => {
+      this.symbolData.set(symbol, {
+        ticks: [],
+        lastSignal: null,
+        performance: {
+          wins: 0,
+          losses: 0,
+          totalTrades: 0
+        },
+        volatility: 0,
+        consecutiveTicks: 0
+      });
+    });
+  }
 
-    if (data.ticks.length > 100) {
-      data.ticks.shift();
-    }
+  async processMarketData(symbol, tick) {
+    try {
+      const data = this.symbolData.get(symbol);
+      if (!data) return;
 
-    if (data.ticks.length >= 30) {
-      const prices = data.ticks.map((t) => t.quote);
-      console.log(
-        `Analisando ${symbol} - Último preço: ${prices[prices.length - 1]}`
-      );
+      // Atualizar dados
+      data.ticks.push(tick);
+      data.consecutiveTicks++;
 
-      const analysis = await MarketAnalyzer.analyzeTrend(prices);
-      //console.log(`Análise para ${symbol}:`, analysis);
-
-      // Reduzir o limite de confiança para 0.75 (75%)
-      if (analysis && analysis.confidence > 0.75) {
-        console.log(
-          `Sinal forte detectado para ${symbol} com confiança ${analysis.confidence}`
-        );
-
-        // Adicionar verificações adicionais
-        const isGoodSignal = verifySignalQuality(analysis.details);
-
-        if (isGoodSignal) {
-          const prediction = await MarketAnalyzer.predictNextMove(prices);
-
-          if (prediction) {
-            // Adicionar informações adicionais ao sinal
-            const currentTime = moment();
-            const entryTime = moment(currentTime).add(30, "seconds");
-            const expirationMinutes = determineExpirationTime(
-              prediction.confidence
-            );
-            const expirationTime = moment(entryTime).add(
-              expirationMinutes,
-              "minutes"
-            );
-
-            const signal = {
-              symbol,
-              direction: prediction.direction === "up" ? "ACIMA" : "ABAIXO",
-              entryPrice: prediction.suggestedEntry,
-              currentTime: currentTime.format("HH:mm:ss"),
-              entryTime: entryTime.format("HH:mm:ss"),
-              expirationTime: expirationTime.format("HH:mm:ss"),
-              expirationMinutes: expirationMinutes,
-              timeToEntry: "30 segundos",
-              timeFrame: `${expirationMinutes} minutos`,
-              confidence: prediction.confidence,
-              stopLoss: prediction.stopLoss,
-              takeProfit: prediction.takeProfit,
-              indicators: prediction.indicators,
-            };
-
-            // Log detalhado do sinal
-            console.log("Sinal gerado:", JSON.stringify(signal, null, 2));
-
-            const position = riskManager.calculatePositionSize(
-              signal.confidence
-            );
-
-            if (position.amount > 0) {
-              signal.amount = position.amount;
-              await saveSignal(signal);
-              await NotificationService.sendSignal(signal);
-              symbolData[symbol].signals.push(signal);
-
-              // Log de confirmação
-              console.log(`Sinal enviado com sucesso para ${symbol}`);
-            }
-          } else {
-            console.log(`Sem previsão válida para ${symbol}`);
-          }
-        }
-      } else {
-        console.log(
-          `Confiança insuficiente para ${symbol}: ${analysis?.confidence || 0}`
-        );
+      // Manter apenas os últimos 1000 ticks
+      if (data.ticks.length > 1000) {
+        data.ticks.shift();
       }
-    } else {
-      console.log(
-        `Aguardando mais dados para ${symbol}. Necessário: 30, Atual: ${data.ticks.length}`
-      );
+
+      // Verificar condições para análise
+      if (!this.shouldAnalyze(symbol)) {
+        return;
+      }
+
+      // Calcular volatilidade
+      data.volatility = this.calculateVolatility(data.ticks);
+
+      // Verificar condições de mercado
+      if (!this.isMarketConditionSuitable(data)) {
+        return;
+      }
+
+      // Realizar análise
+      const prices = data.ticks.map(t => t.quote);
+      const analysis = await MarketAnalyzer.analyzeTrend(prices);
+
+      // Validar e processar sinal
+      if (this.validateAnalysis(analysis)) {
+        await this.processSignal(symbol, analysis, tick);
+      }
+
+    } catch (error) {
+      console.error(`Erro ao processar dados para ${symbol}:`, error);
     }
-  } catch (error) {
-    console.error(`Erro ao processar dados do mercado para ${symbol}:`, error);
   }
-}
-// Função para verificar a qualidade do sinal
-function verifySignalQuality(details) {
-  const { rsi, macd, bollinger } = details;
 
-  // Para sinais de compra (ACIMA)
-  if (rsi < 30) {
-    // Sobrevendido
+  shouldAnalyze(symbol) {
+    const data = this.symbolData.get(symbol);
+    if (!data) return false;
+
+    // Verificar quantidade mínima de ticks
+    if (data.ticks.length < this.minDataPoints) {
+      return false;
+    }
+
+    // Verificar tempo desde último sinal
+    if (data.lastSignal) {
+      const timeSinceLastSignal = Date.now() - data.lastSignal;
+      if (timeSinceLastSignal < this.config.signalCooldown) {
+        return false;
+      }
+    }
+
     return true;
   }
 
-  // Para sinais de venda (ABAIXO)
-  if (rsi > 70) {
-    // Sobrecomprado
+  isMarketConditionSuitable(data) {
+    // Verificar volatilidade
+    if (data.volatility > this.config.volatilityThreshold) {
+      return false;
+    }
+
+    // Verificar consistência dos ticks
+    if (data.consecutiveTicks < this.config.minConsecutiveTicks) {
+      return false;
+    }
+
     return true;
   }
 
-  // Verificar cruzamento MACD
-  if (Math.abs(macd.MACD - macd.signal) < 0.00001) {
+  calculateVolatility(ticks) {
+    if (ticks.length < 2) return 0;
+
+    const prices = ticks.map(t => t.quote);
+    const returns = [];
+
+    for (let i = 1; i < prices.length; i++) {
+      returns.push((prices[i] - prices[i - 1]) / prices[i - 1]);
+    }
+
+    const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+    const variance = returns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / returns.length;
+
+    return Math.sqrt(variance);
+  }
+
+  validateAnalysis(analysis) {
+    if (!analysis || !analysis.confidence) return false;
+
+    return (
+      analysis.confidence >= this.config.minConfidence &&
+      analysis.direction !== "neutral" &&
+      analysis.shouldTrade
+    );
+  }
+
+  async processSignal(symbol, analysis, currentTick) {
+    try {
+      const signal = this.createSignal(symbol, analysis, currentTick);
+      
+      // Validar sinal final
+      if (!this.validateFinalSignal(signal)) {
+        return;
+      }
+
+      // Salvar e enviar sinal
+      await this.saveSignal(signal);
+      await NotificationService.sendSignal(signal);
+
+      // Atualizar dados do símbolo
+      this.updateSymbolData(symbol, signal);
+
+      console.log(`Sinal gerado para ${symbol}:`, signal);
+
+    } catch (error) {
+      console.error(`Erro ao processar sinal para ${symbol}:`, error);
+    }
+  }
+
+  createSignal(symbol, analysis, currentTick) {
+    const entryTime = moment().add(30, "seconds");
+    const expirationMinutes = this.calculateExpirationTime(analysis);
+    const expirationTime = moment(entryTime).add(expirationMinutes, "minutes");
+
+    return {
+      symbol,
+      direction: analysis.direction === "up" ? "ACIMA" : "ABAIXO",
+      entryPrice: currentTick.quote,
+      currentTime: moment().format("HH:mm:ss"),
+      entryTime: entryTime.format("HH:mm:ss"),
+      expirationTime: expirationTime.format("HH:mm:ss"),
+      timeFrame: `${expirationMinutes}M`,
+      confidence: analysis.confidence,
+      stopLoss: analysis.stopLoss,
+      takeProfit: analysis.takeProfit,
+      indicators: analysis.details.indicators
+    };
+  }
+
+  calculateExpirationTime(analysis) {
+    const confidence = analysis.confidence;
+    if (confidence > 0.98) return 1;
+    if (confidence > 0.96) return 2;
+    return 3;
+  }
+
+  validateFinalSignal(signal) {
+    // Verificar horário de negociação
+    const currentHour = moment().hour();
+    if (currentHour < 8 || currentHour > 20) {
+      return false;
+    }
+
+    // Verificar stop loss e take profit
+    if (!signal.stopLoss || !signal.takeProfit) {
+      return false;
+    }
+
     return true;
   }
 
-  // Verificar Bollinger Bands
-  const price = bollinger.price;
-  if (price <= bollinger.lower || price >= bollinger.upper) {
-    return true;
-  }
-
-  return false;
-}
-
-// Função para determinar o tempo de expiração baseado na confiança
-function determineExpirationTime(confidence) {
-  if (confidence > 0.95) return 1; // 1 minuto para sinais muito fortes
-  if (confidence > 0.9) return 2; // 2 minutos para sinais fortes
-  if (confidence > 0.85) return 3; // 3 minutos para sinais bons
-  return 5; // 5 minutos para outros sinais
-}
-
-async function saveSignal(signal) {
-  return new Promise((resolve, reject) => {
-    db.run(
-      `
-            INSERT INTO signals (
-                symbol, entry_time, direction, entry_price, 
-                expiration_time, confidence
-            ) VALUES (?, ?, ?, ?, ?, ?)
-        `,
-      [
+  async saveSignal(signal) {
+    return new Promise((resolve, reject) => {
+      db.run(`
+        INSERT INTO signals (
+          symbol, entry_time, direction, entry_price, 
+          expiration_time, confidence
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `, [
         signal.symbol,
         moment(signal.entryTime, "HH:mm:ss").unix(),
         signal.direction,
         signal.entryPrice,
         moment(signal.expirationTime, "HH:mm:ss").unix(),
-        signal.confidence,
-      ],
-      function (err) {
+        signal.confidence
+      ], function(err) {
         if (err) reject(err);
         else resolve(this.lastID);
-      }
-    );
-  });
-}
-
-function connectWebSocket() {
-  const app_id = process.env.APP_ID || 1089;
-  const socket = new WebSocket(
-    `wss://ws.binaryws.com/websockets/v3?app_id=${app_id}`
-  );
-
-  socket.onopen = () => {
-    console.log("Conectado ao WebSocket da Deriv");
-    symbols.forEach((symbol) => {
-      socket.send(
-        JSON.stringify({
-          ticks: symbol,
-          subscribe: 1,
-        })
-      );
+      });
     });
-  };
+  }
 
-  socket.onmessage = async (event) => {
-    const message = JSON.parse(event.data);
-
-    if (message.tick) {
-      const { symbol, quote, epoch } = message.tick;
-      await processMarketData(symbol, { quote, epoch });
+  updateSymbolData(symbol, signal) {
+    const data = this.symbolData.get(symbol);
+    if (data) {
+      data.lastSignal = Date.now();
+      data.consecutiveTicks = 0;
     }
-  };
+  }
 
-  socket.onerror = (error) => {
-    console.error("Erro no WebSocket:", error);
-  };
+  connectWebSocket() {
+    const app_id = process.env.APP_ID || 1089;
+    const ws = new WebSocket(`wss://ws.binaryws.com/websockets/v3?app_id=${app_id}`);
 
-  socket.onclose = () => {
-    console.log("Conexão WebSocket fechada, reconectando...");
-    setTimeout(connectWebSocket, 5000);
-  };
-}
+    ws.on('open', () => {
+      console.log("Conectado ao WebSocket Deriv");
+      this.subscribeToSymbols(ws);
+    });
 
-// Rotas da API
-app.get("/signals", (req, res) => {
-  const activeSignals = Object.values(symbolData)
-    .flatMap((data) => data.signals)
-    .filter((signal) =>
-      moment(signal.expirationTime, "HH:mm:ss").isAfter(moment())
-    );
-  res.json(activeSignals);
-});
-
-app.get("/performance", (req, res) => {
-  db.all(
-    `
-        SELECT 
-            symbol,
-            COUNT(*) as total_trades,
-            SUM(CASE WHEN result = 'win' THEN 1 ELSE 0 END) as wins,
-            SUM(CASE WHEN result = 'loss' THEN 1 ELSE 0 END) as losses,
-            ROUND(AVG(confidence) * 100, 2) as avg_confidence
-        FROM signals
-        GROUP BY symbol
-    `,
-    [],
-    (err, rows) => {
-      if (err) {
-        res.status(500).json({ error: err.message });
-        return;
+    ws.on('message', async (data) => {
+      const message = JSON.parse(data);
+      if (message.tick) {
+        await this.processMarketData(message.tick.symbol, {
+          quote: message.tick.quote,
+          epoch: message.tick.epoch
+        });
       }
-      res.json(rows);
-    }
-  );
-});
+    });
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "../../client", "index.html"));
-});
+    ws.on('error', (error) => {
+      console.error("Erro no WebSocket:", error);
+    });
 
-// Inicialização
-function monitorSignals() {
-  setInterval(() => {
+    ws.on('close', () => {
+      console.log("Conexão WebSocket fechada, reconectando...");
+      setTimeout(() => this.connectWebSocket(), 5000);
+    });
+  }
+
+  subscribeToSymbols(ws) {
+    this.symbols.forEach(symbol => {
+      ws.send(JSON.stringify({
+        ticks: symbol,
+        subscribe: 1
+      }));
+    });
+  }
+
+  startMonitoring() {
+    setInterval(() => {
+      this.logSystemStatus();
+      this.cleanupOldData();
+    }, 60000);
+  }
+
+  logSystemStatus() {
     console.log("\n=== Status do Sistema ===");
-    Object.keys(symbolData).forEach((symbol) => {
-      const data = symbolData[symbol];
-      console.log(`
-              Símbolo: ${symbol}
-              Ticks: ${data.ticks.length}
-              Sinais Ativos: ${data.signals.length}
-              Último Preço: ${data.ticks[data.ticks.length - 1]?.quote || "N/A"}
-          `);
+    this.symbols.forEach(symbol => {
+      const data = this.symbolData.get(symbol);
+      if (data) {
+        console.log(`
+          Símbolo: ${symbol}
+          Ticks: ${data.ticks.length}
+          Último Preço: ${data.ticks[data.ticks.length - 1]?.quote || "N/A"}
+          Volatilidade: ${data.volatility.toFixed(6)}
+          Último Sinal: ${data.lastSignal ? moment(data.lastSignal).fromNow() : "N/A"}
+        `);
+      }
     });
-  }, 60000); // Log a cada minuto
+  }
+
+  cleanupOldData() {
+    this.symbols.forEach(symbol => {
+      const data = this.symbolData.get(symbol);
+      if (data && data.ticks.length > this.minDataPoints) {
+        data.ticks = data.ticks.slice(-this.minDataPoints);
+      }
+    });
+  }
+
+  getActiveSignals(req, res) {
+    const activeSignals = Array.from(this.symbolData.values())
+      .filter(data => data.lastSignal && Date.now() - data.lastSignal < this.signalTimeout)
+      .map(data => ({
+        symbol: data.symbol,
+        lastSignal: data.lastSignal,
+        performance: data.performance
+      }));
+
+    res.json(activeSignals);
+  }
+
+  getPerformanceMetrics(req, res) {
+    const performance = Array.from(this.symbolData.entries()).map(([symbol, data]) => ({
+      symbol,
+      wins: data.performance.wins,
+      losses: data.performance.losses,
+      winRate: data.performance.totalTrades > 0 
+        ? (data.performance.wins / data.performance.totalTrades) * 100 
+        : 0
+    }));
+
+    res.json(performance);
+  }
+
+  
 }
 
-// Adicione na inicialização
-async function initialize() {
-  await MarketAnalyzer.initialize();
-  connectWebSocket();
-  monitorSignals();
-}
+const predictionsManager = new PredictionsManager();
+predictionsManager.initialize();
 
-initialize().catch(console.error);
-
-module.exports = app;
+module.exports = predictionsManager.app;
