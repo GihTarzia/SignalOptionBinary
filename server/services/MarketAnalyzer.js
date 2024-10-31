@@ -518,32 +518,26 @@ class MarketAnalyzer {
     let direction = "neutral";
     let strength = 0;
 
-    // Zonas mais sensíveis
-    if (current <= 30) {
+    // Ajuste das zonas de sobrevenda/sobrecompra
+    if (current <= 35) {
       direction = "up";
-      strength = (30 - current) / 15;
-    } else if (current >= 70) {
+      strength = Math.min((35 - current) / 15, 1); // Mais sensível
+    } else if (current >= 65) {
       direction = "down";
-      strength = (current - 70) / 15;
+      strength = Math.min((current - 65) / 15, 1);
     } else if (current < 45) {
       direction = "up";
-      strength = ((45 - current) / 15) * 0.8; // 80% da força máxima
+      strength = Math.min((45 - current) / 10, 0.7);
     } else if (current > 55) {
       direction = "down";
-      strength = ((current - 55) / 15) * 0.8;
+      strength = Math.min((current - 55) / 10, 0.7);
     }
 
     // Considerar tendência do RSI
-    if (rsi.trend === direction) {
-      strength *= 1.25; // Aumentar peso quando tendência confirma
-    }
-
-    // Considerar histórico
-    if (rsi.history && rsi.history.length >= 5) {
-      const trend = this.calculateRSITrend(rsi.history);
-      if (trend === direction) {
-        strength *= 1.2;
-      }
+    if (rsi.trend === "up" && direction === "up") {
+      strength *= 1.2;
+    } else if (rsi.trend === "down" && direction === "down") {
+      strength *= 1.2;
     }
 
     return {
@@ -561,50 +555,51 @@ class MarketAnalyzer {
     };
 
     // Aumentar sensibilidade do MACD
-    const significance = Math.abs(macd.value - macd.signal) * 20000;
-    const histogramStrength = Math.abs(macd.histogram) * 15000;
+    const significance = Math.abs(macd.value - macd.signal) * 10000;
 
     if (macd.histogram > 0) {
       signal.direction = "up";
-      signal.strength = Math.min((significance + histogramStrength) / 2, 1);
+      signal.strength = Math.min(significance, 1);
     } else if (macd.histogram < 0) {
       signal.direction = "down";
-      signal.strength = Math.min((significance + histogramStrength) / 2, 1);
+      signal.strength = Math.min(significance, 1);
     }
 
     // Considerar tendência
     if (macd.trend === signal.direction) {
-      signal.strength *= 1.3;
+      signal.strength *= 1.2;
     }
 
     return signal;
   }
 
   analyzeBollinger(bollinger) {
-    if (!bollinger.percentB && bollinger.upper && bollinger.lower && bollinger.middle) {
+    if (
+      !bollinger.percentB &&
+      bollinger.upper &&
+      bollinger.lower &&
+      bollinger.middle
+    ) {
+      // Calcular percentB se não estiver disponível
       const price = bollinger.price || bollinger.middle;
-      bollinger.percentB = (price - bollinger.lower) / (bollinger.upper - bollinger.lower);
+      bollinger.percentB =
+        (price - bollinger.lower) / (bollinger.upper - bollinger.lower);
     }
 
     const signal = {
-      type: 'bollinger',
+      type: "bollinger",
       direction: "neutral",
-      strength: 0
+      strength: 0,
     };
 
     if (bollinger.percentB !== null) {
-      if (bollinger.percentB <= 0.15) { // Mais sensível
+      if (bollinger.percentB <= 0.2) {
         signal.direction = "up";
-        signal.strength = Math.min((0.15 - bollinger.percentB) * 6.67, 1);
-      } else if (bollinger.percentB >= 0.85) {
+        signal.strength = Math.min((0.2 - bollinger.percentB) * 5, 1);
+      } else if (bollinger.percentB >= 0.8) {
         signal.direction = "down";
-        signal.strength = Math.min((bollinger.percentB - 0.85) * 6.67, 1);
+        signal.strength = Math.min((bollinger.percentB - 0.8) * 5, 1);
       }
-    }
-
-    // Considerar largura das bandas
-    if (bollinger.bandwidth) {
-      signal.strength *= (1 + Math.min(bollinger.bandwidth * 1000, 0.5));
     }
 
     return signal;
@@ -2172,12 +2167,12 @@ class MarketAnalyzer {
     };
 
     const weights = {
-      rsi: 0.35,    // Aumentado
-      macd: 0.30,   // Mantido
-      bollinger: 0.20, // Reduzido
-      ema: 0.15     // Reduzido
+      rsi: 0.25,
+      macd: 0.3,
+      bollinger: 0.25,
+      ema: 0.2,
     };
-    
+
     validSignals.forEach((signal, index) => {
       const weight = weights[signal.type] || 0.25;
       directions[signal.direction] += weight * (signal.strength || 1);
