@@ -185,37 +185,37 @@ function calculatePredictions(symbol) {
   let confidence = 0;
 
   if (macd[macd.length - 1] > macdSignal[macdSignal.length - 1]) {
-    predictedDirection = "CALL";
+    predictedDirection = "ACIMA";
     confidence += 0.3;
   } else {
-    predictedDirection = "PUT";
+    predictedDirection = "ABAIXO";
     confidence += 0.3;
   }
 
   if (rsi < 30) {
-    predictedDirection = "CALL";
+    predictedDirection = "ACIMA";
     confidence += 0.2;
   } else if (rsi > 70) {
-    predictedDirection = "PUT";
+    predictedDirection = "ABAIXO";
     confidence += 0.2;
   }
 
   if (bollingerBands) {
     const { upperBand, lowerBand } = bollingerBands;
     if (lastPrice <= lowerBand) {
-      predictedDirection = "CALL";
+      predictedDirection = "ACIMA";
       confidence += 0.2;
     } else if (lastPrice >= upperBand) {
-      predictedDirection = "PUT";
+      predictedDirection = "ABAIXO";
       confidence += 0.2;
     }
   }
 
   if (stochastic < 20) {
-    predictedDirection = "CALL";
+    predictedDirection = "ACIMA";
     confidence += 0.1;
   } else if (stochastic > 80) {
-    predictedDirection = "PUT";
+    predictedDirection = "ABAIXO";
     confidence += 0.1;
   }
 
@@ -229,9 +229,9 @@ function calculatePredictions(symbol) {
 
   data.totalPredictions++;
   if (
-    (predictedDirection === "CALL" &&
+    (predictedDirection === "ACIMA" &&
       lastPrice > emaShort[emaShort.length - 1]) ||
-    (predictedDirection === "PUT" &&
+    (predictedDirection === "ABAIXO" &&
       lastPrice < emaShort[emaShort.length - 1])
   ) {
     data.successfulPredictions++;
@@ -287,9 +287,9 @@ function detectCandlePattern(candles) {
   const secondLastCandle = candles[candles.length - 2];
 
   if (lastCandle.close > lastCandle.open && secondLastCandle.close < secondLastCandle.open) {
-    return "CALL"; // Exemplo de padrão de reversão
+    return "ACIMA"; // Exemplo de padrão de reversão
   } else if (lastCandle.close < lastCandle.open && secondLastCandle.close > secondLastCandle.open) {
-    return "PUT"; // Exemplo de padrão de reversão
+    return "ABAIXO"; // Exemplo de padrão de reversão
   }
 
   return null;
@@ -329,9 +329,9 @@ function getActualDirection(symbol, lastPrice) {
   const predictionPrice = data.candles[data.candles.length - 1].close;
 
   if (lastPrice > predictionPrice) {
-    return "CALL";
+    return "ACIMA";
   } else if (lastPrice < predictionPrice) {
-    return "PUT";
+    return "ABAIXO";
   } else {
     return "Neutro";
   }

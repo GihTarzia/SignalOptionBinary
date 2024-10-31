@@ -1,18 +1,18 @@
 const nodemailer = require("nodemailer");
 const TelegramBot = require("node-telegram-bot-api");
-require("dotenv").config();
-
+const TELEGRAM_TOKEN = "7906357537:AAHIU7JotNw2bQ46cSnruCtRmC65DCTAGvQ";
+const TELEGRAM_CHAT_ID = "164097182";
 class NotificationService {
   constructor() {
-    if (!process.env.TELEGRAM_TOKEN) {
+    if (!TELEGRAM_TOKEN) {
       console.error("TELEGRAM_TOKEN não configurado no arquivo .env");
       this.telegramEnabled = false;
-    } else if (!process.env.TELEGRAM_CHAT_ID) {
+    } else if (!TELEGRAM_CHAT_ID) {
       console.error("TELEGRAM_CHAT_ID não configurado no arquivo .env");
       this.telegramEnabled = false;
     } else {
       this.telegramEnabled = true;
-      this.telegramBot = new TelegramBot(process.env.TELEGRAM_TOKEN, {
+      this.telegramBot = new TelegramBot(TELEGRAM_TOKEN, {
         polling: false,
       });
     }
@@ -35,29 +35,22 @@ class NotificationService {
     return `
     🎯 *NOVO SINAL DE TRADING*
     
-    Par: ${signal.symbol}
-    Direção: ${signal.direction}
-    Preço de Entrada: ${signal.entryPrice}
+    Ativo: ${signal.symbol.replace("frx", "")}
+    Direção: ${signal.direction} ${signal.direction === "ACIMA" ? "🟢" : "🔴"}
     
     ⏰ *Tempos*
-    Hora Atual: ${signal.currentTime}
-    Entrada em: ${signal.timeToEntry}
-    Hora de Entrada: ${signal.entryTime}
-    Tempo do Trade: ${signal.timeFrame}
-    Hora de Expiração: ${signal.expirationTime}
+    Entrada: ${signal.entryTime}
+    Tempo: ${signal.timeFrame}
+    Expiração: ${signal.expirationTime}
     
     📊 *Detalhes*
     Confiança: ${(signal.confidence * 100).toFixed(2)}%
-    Stop Loss: ${signal.stopLoss}
-    Take Profit: ${signal.takeProfit}
-    
-    ⚠️ _Trade por sua conta e risco_
-        `.trim();
+            `.trim();
   }
   async sendTelegramMessage(message) {
     console.log(message);
     try {
-      //await this.telegramBot.sendMessage(process.env.TELEGRAM_CHAT_ID, message);
+      await this.telegramBot.sendMessage(TELEGRAM_CHAT_ID, message);
     } catch (error) {
       console.error("Erro ao enviar mensagem no Telegram:", error);
     }

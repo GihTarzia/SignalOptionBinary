@@ -54,65 +54,129 @@ symbols.forEach((symbol) => {
 
 async function processMarketData(symbol, tick) {
   try {
-      const data = symbolData[symbol];
-      data.ticks.push(tick);
+    const data = symbolData[symbol];
+    data.ticks.push(tick);
 
-      if (data.ticks.length > 100) {
-          data.ticks.shift();
-      }
+    // Log para verificar os ticks
+    console.log(
+      `Processando dados para ${symbol}. Ticks acumulados: ${data.ticks.length}`
+    );
 
-      if (data.ticks.length >= 30) {
-          const prices = data.ticks.map(t => t.quote);
-          const analysis = await MarketAnalyzer.analyzeTrend(prices);
+    if (data.ticks.length > 100) {
+      data.ticks.shift();
+    }
 
-          if (analysis.confidence > 0.8) {
-              // Usar generateSignal para criar o sinal base
-              const baseSignal = generateSignal(symbol, analysis);
-              
-              // Adicionar informações adicionais ao sinal
-              const currentTime = moment();
-              const entryTime = moment(currentTime).add(30, 'seconds');
-              const expirationMinutes = determineExpirationTime(analysis.confidence);
-              const expirationTime = moment(entryTime).add(expirationMinutes, 'minutes');
+    if (data.ticks.length >= 30) {
+      const prices = data.ticks.map((t) => t.quote);
+      console.log(
+        `Analisando ${symbol} - Último preço: ${prices[prices.length - 1]}`
+      );
 
-              // Combinar o sinal base com as informações adicionais
-              const signal = {
-                  ...baseSignal,
-                  currentTime: currentTime.format('HH:mm:ss'),
-                  entryTime: entryTime.format('HH:mm:ss'),
-                  expirationTime: expirationTime.format('HH:mm:ss'),
-                  expirationMinutes: expirationMinutes,
-                  timeToEntry: '30 segundos',
-                  timeFrame: `${expirationMinutes} minutos`,
-                  stopLoss: baseSignal.direction === 'CALL' ? 
-                      baseSignal.entryPrice * 0.997 : baseSignal.entryPrice * 1.003,
-                  takeProfit: baseSignal.direction === 'CALL' ? 
-                      baseSignal.entryPrice * 1.005 : baseSignal.entryPrice * 0.995
-              };
+      const analysis = await MarketAnalyzer.analyzeTrend(prices);
+      //console.log(`Análise para ${symbol}:`, analysis);
 
-              const position = riskManager.calculatePositionSize(signal.confidence);
-              
-              if (position.amount > 0) {
-                  signal.amount = position.amount;
-                  await saveSignal(signal);
-                  await NotificationService.sendSignal(signal);
-                  symbolData[symbol].signals.push(signal);
+      // Reduzir o limite de confiança para 0.75 (75%)
+      if (analysis && analysis.confidence > 0.75) {
+        console.log(
+          `Sinal forte detectado para ${symbol} com confiança ${analysis.confidence}`
+        );
 
-                  console.log(`Novo sinal gerado para ${symbol}:`, {
-                      direction: signal.direction,
-                      confidence: signal.confidence,
-                      currentTime: signal.currentTime,
-                      entryTime: signal.entryTime,
-                      expirationTime: signal.expirationTime,
-                      timeFrame: signal.timeFrame,
-                      price: signal.entryPrice.toFixed(5)
-                  });
-              }
+        // Adicionar verificações adicionais
+        const isGoodSignal = verifySignalQuality(analysis.details);
+
+        if (isGoodSignal) {
+          const prediction = await MarketAnalyzer.predictNextMove(prices);
+
+          if (prediction) {
+            // Adicionar informações adicionais ao sinal
+            const currentTime = moment();
+            const entryTime = moment(currentTime).add(30, "seconds");
+            const expirationMinutes = determineExpirationTime(
+              prediction.confidence
+            );
+            const expirationTime = moment(entryTime).add(
+              expirationMinutes,
+              "minutes"
+            );
+
+            const signal = {
+              symbol,
+              direction: prediction.direction === "up" ? "ACIMA" : "ABAIXO",
+              entryPrice: prediction.suggestedEntry,
+              currentTime: currentTime.format("HH:mm:ss"),
+              entryTime: entryTime.format("HH:mm:ss"),
+              expirationTime: expirationTime.format("HH:mm:ss"),
+              expirationMinutes: expirationMinutes,
+              timeToEntry: "30 segundos",
+              timeFrame: `${expirationMinutes} minutos`,
+              confidence: prediction.confidence,
+              stopLoss: prediction.stopLoss,
+              takeProfit: prediction.takeProfit,
+              indicators: prediction.indicators,
+            };
+
+            // Log detalhado do sinal
+            console.log("Sinal gerado:", JSON.stringify(signal, null, 2));
+
+            const position = riskManager.calculatePositionSize(
+              signal.confidence
+            );
+
+            if (position.amount > 0) {
+              signal.amount = position.amount;
+              await saveSignal(signal);
+              await NotificationService.sendSignal(signal);
+              symbolData[symbol].signals.push(signal);
+
+              // Log de confirmação
+              console.log(`Sinal enviado com sucesso para ${symbol}`);
+            }
+          } else {
+            console.log(`Sem previsão válida para ${symbol}`);
           }
+        }
+      } else {
+        console.log(
+          `Confiança insuficiente para ${symbol}: ${analysis?.confidence || 0}`
+        );
       }
+    } else {
+      console.log(
+        `Aguardando mais dados para ${symbol}. Necessário: 30, Atual: ${data.ticks.length}`
+      );
+    }
   } catch (error) {
-      console.error(`Erro ao processar dados do mercado para ${symbol}:`, error);
+    console.error(`Erro ao processar dados do mercado para ${symbol}:`, error);
   }
+}
+// Função para verificar a qualidade do sinal
+function verifySignalQuality(details) {
+  const { rsi, macd, bollinger } = details;
+
+  // Para sinais de compra (ACIMA)
+  if (rsi < 30) {
+    // Sobrevendido
+    return true;
+  }
+
+  // Para sinais de venda (ABAIXO)
+  if (rsi > 70) {
+    // Sobrecomprado
+    return true;
+  }
+
+  // Verificar cruzamento MACD
+  if (Math.abs(macd.MACD - macd.signal) < 0.00001) {
+    return true;
+  }
+
+  // Verificar Bollinger Bands
+  const price = bollinger.price;
+  if (price <= bollinger.lower || price >= bollinger.upper) {
+    return true;
+  }
+
+  return false;
 }
 
 // Função para determinar o tempo de expiração baseado na confiança
@@ -121,19 +185,6 @@ function determineExpirationTime(confidence) {
   if (confidence > 0.9) return 2; // 2 minutos para sinais fortes
   if (confidence > 0.85) return 3; // 3 minutos para sinais bons
   return 5; // 5 minutos para outros sinais
-}
-
-function generateSignal(symbol, trend) {
-  const currentPrice = symbolData[symbol].ticks[symbolData[symbol].ticks.length - 1].quote;
-  
-  return {
-      symbol,
-      direction: trend.direction === 'up' ? 'CALL' : 'PUT',
-      entryPrice: currentPrice,
-      confidence: trend.confidence,
-      strength: trend.strength || 0,
-      timestamp: Date.now()
-  };
 }
 
 async function saveSignal(signal) {
@@ -236,9 +287,26 @@ app.get("/", (req, res) => {
 });
 
 // Inicialização
+function monitorSignals() {
+  setInterval(() => {
+    console.log("\n=== Status do Sistema ===");
+    Object.keys(symbolData).forEach((symbol) => {
+      const data = symbolData[symbol];
+      console.log(`
+              Símbolo: ${symbol}
+              Ticks: ${data.ticks.length}
+              Sinais Ativos: ${data.signals.length}
+              Último Preço: ${data.ticks[data.ticks.length - 1]?.quote || "N/A"}
+          `);
+    });
+  }, 60000); // Log a cada minuto
+}
+
+// Adicione na inicialização
 async function initialize() {
   await MarketAnalyzer.initialize();
   connectWebSocket();
+  monitorSignals();
 }
 
 initialize().catch(console.error);
