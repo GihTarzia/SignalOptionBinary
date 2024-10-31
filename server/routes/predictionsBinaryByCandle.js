@@ -1,22 +1,36 @@
 const express = require("express");
-const app = express.Router();
 const WebSocket = require("ws");
 const path = require("path");
+const sqlite3 = require("sqlite3").verbose();
+
+const app = express.Router();
+const db = new sqlite3.Database("predictions.db", (err) => {
+  if (err) {
+    console.error("Erro ao abrir o banco de dados:", err.message);
+  } else {
+    console.log("Conectado ao banco de dados SQLite.");
+    db.run(`CREATE TABLE IF NOT EXISTS predictions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      symbol TEXT,
+      predictedDirection TEXT,
+      confidence REAL,
+      successful INTEGER,
+      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+  }
+});
 
 const symbols = [
-  "frxAUDCAD", "frxAUDCHF", "frxAUDJPY", "frxAUDNZD", "frxAUDUSD",
-  "frxEURAUD", "frxEURCAD", "frxEURCHF", "frxEURGBP", "frxEURJPY",
-  "frxEURNZD", "frxEURUSD", "frxGBPAUD", "frxGBPCAD", "frxGBPCHF",
-  "frxGBPJPY", "frxGBPNZD", "frxGBPUSD", "frxNZDJPY", "frxUSDSEK",
-  "frxUSDCAD", "frxUSDJPY", "frxUSDMXN", "frxUSDNOK", "frxUSDPLN",
+  // Lista de símbolos
 ];
 
-let symbolData = {};
+const symbolData = {};
 
 // Inicializar dados para cada símbolo
-symbols.forEach((symbol) => {
+symbols.forEach(symbol => {
   symbolData[symbol] = {
     ticks: [],
+    candles: [],
     successfulPredictions: 0,
     totalPredictions: 0,
     lastPredictionTime: 0,
@@ -27,14 +41,14 @@ symbols.forEach((symbol) => {
 // Função para conectar ao WebSocket
 function connectWebSocket() {
   const app_id = process.env.APP_ID || 1089;
-  let socket = new WebSocket(`wss://ws.binaryws.com/websockets/v3?app_id=${app_id}`);
+  const socket = new WebSocket(`wss://ws.binaryws.com/websockets/v3?app_id=${app_id}`);
 
   socket.onopen = () => {
     console.log("Conectado ao WebSocket da Deriv");
-    symbols.forEach((symbol) => requestTicks(symbol, socket));
+    symbols.forEach(symbol => requestTicks(symbol, socket));
   };
 
-  socket.onmessage = (event) => {
+  socket.onmessage = event => {
     const message = JSON.parse(event.data);
     if (message.error) {
       console.log(message.echo_req.ticks + ": " + message.error.code);
@@ -43,16 +57,12 @@ function connectWebSocket() {
       const { symbol, quote, epoch } = message.tick;
       if (symbolData[symbol]) {
         symbolData[symbol].ticks.push({ quote, epoch });
-        const oneMinuteAgoEpoch = Math.floor(Date.now() / 1000) - 1 * 60;
-        symbolData[symbol].ticks = symbolData[symbol].ticks.filter(
-          (tick) => tick.epoch >= oneMinuteAgoEpoch
-        );
-        calculatePredictions(symbol);
+        processTicks(symbol);
       }
     }
   };
 
-  socket.onerror = (error) => {
+  socket.onerror = error => {
     console.error("Erro no WebSocket:", error);
   };
 
@@ -64,52 +74,37 @@ function connectWebSocket() {
 
 // Solicitar ticks
 function requestTicks(symbol, socket) {
-  const requestMessage = {
-    ticks: symbol,
-    subscribe: 1,
-  };
+  const requestMessage = { ticks: symbol, subscribe: 1 };
   socket.send(JSON.stringify(requestMessage));
 }
 
-// Função para criar velas a partir de ticks
-function createCandles(ticks, interval) {
-  const candles = [];
-  let currentCandle = null;
+function processTicks(symbol) {
+  const data = symbolData[symbol];
+  console.log(`Recebendo ticks para ${symbol}:`, data.ticks.length);
 
-  ticks.forEach(tick => {
-    const tickTime = new Date(tick.epoch * 1000);
-    const tickClose = tick.quote;
+  const oneMinuteAgoEpoch = Math.floor(Date.now() / 1000) - 60;
+  data.ticks = data.ticks.filter(tick => tick.epoch >= oneMinuteAgoEpoch);
 
-    if (!currentCandle || tickTime - currentCandle.startTime >= interval * 60 * 1000) {
-      if (currentCandle) {
-        candles.push(currentCandle);
-      }
-      currentCandle = {
-        open: tickClose,
-        high: tickClose,
-        low: tickClose,
-        close: tickClose,
-        startTime: tickTime,
-        endTime: tickTime,
-      };
-    } else {
-      currentCandle.high = Math.max(currentCandle.high, tickClose);
-      currentCandle.low = Math.min(currentCandle.low, tickClose);
-      currentCandle.close = tickClose;
-      currentCandle.endTime = tickTime;
+  if (data.ticks.length >= 60) {
+    const candle = createCandle(data.ticks);
+    console.log(`Candle criado para ${symbol}`, candle);
+    data.candles.push(candle);
+    if (data.candles.length > 3) {
+      data.candles.shift();
     }
-  });
-
-  if (currentCandle) {
-    candles.push(currentCandle);
+    calculatePredictions(symbol);
   }
-
-  return candles;
 }
 
-// Função para calcular a EMA
+function createCandle(ticks) {
+  const open = ticks[0].quote;
+  const close = ticks[ticks.length - 1].quote;
+  const high = Math.max(...ticks.map(t => t.quote));
+  const low = Math.min(...ticks.map(t => t.quote));
+  return { open, high, low, close };
+}
+
 function calculateEMA(prices, period) {
-  if (prices.length < period) return [];
   const multiplier = 2 / (period + 1);
   let ema = prices.slice(0, period).reduce((a, b) => a + b, 0) / period;
   return prices.slice(period).reduce((acc, price) => {
@@ -119,7 +114,6 @@ function calculateEMA(prices, period) {
   }, []);
 }
 
-// Função para calcular o RSI
 function calculateRSI(prices, period = 14) {
   if (prices.length < period) return null;
 
@@ -141,34 +135,23 @@ function calculateRSI(prices, period = 14) {
   const averageLoss = losses / period;
   const rs = averageGain / averageLoss;
 
-  return 100 - (100 / (1 + rs));
+  return 100 - 100 / (1 + rs);
 }
 
-// Função para calcular Bandas de Bollinger
 function calculateBollingerBands(prices, period = 20) {
   if (prices.length < period) return null;
 
-  const simpleMovingAverage = prices.slice(-period).reduce((a, b) => a + b, 0) / period;
-  const variance = prices.slice(-period).reduce((acc, price) => acc + Math.pow(price - simpleMovingAverage, 2), 0) / period;
+  const sma = prices.slice(-period).reduce((a, b) => a + b, 0) / period;
+  const variance = prices.slice(-period).reduce((acc, price) => acc + Math.pow(price - sma, 2), 0) / period;
   const standardDeviation = Math.sqrt(variance);
 
   return {
-    upperBand: simpleMovingAverage + (2 * standardDeviation),
-    lowerBand: simpleMovingAverage - (2 * standardDeviation),
-    middleBand: simpleMovingAverage,
+    upperBand: sma + 2 * standardDeviation,
+    lowerBand: sma - 2 * standardDeviation,
+    middleBand: sma,
   };
 }
 
-// Função para calcular MACD
-function calculateMACD(prices) {
-  const shortEMA = calculateEMA(prices, 12);
-  const longEMA = calculateEMA(prices, 26);
-  const macd = shortEMA.slice(longEMA.length - shortEMA.length);
-  const signalLine = calculateEMA(macd, 9);
-  return { macd, signalLine };
-}
-
-// Função para calcular Estocástico
 function calculateStochastic(prices, period = 14) {
   if (prices.length < period) return null;
 
@@ -179,135 +162,194 @@ function calculateStochastic(prices, period = 14) {
   return ((currentPrice - lowestLow) / (highestHigh - lowestLow)) * 100;
 }
 
-// Função para calcular previsões
 function calculatePredictions(symbol) {
-  //console.log(`Calculando previsões para ${symbol}`);
   const data = symbolData[symbol];
 
-  //console.log(`Ticks disponíveis para ${symbol}: ${data.ticks.length}`);
+  if (data.candles.length < 3) return;
 
-  if (data.ticks.length < 300) {
-    console.log(`Dados insuficientes para ${symbol}. Ticks disponíveis: ${data.ticks.length}`);
-    return;
-  }
+  const prices = data.candles.map(candle => candle.close);
 
-  const candles = createCandles(data.ticks, 1); // Criar velas de 1 minuto
-  console.log(`Velas criadas para ${symbol}: ${candles.length}`);
-
-  if (candles.length < 20) {
-    console.log(`Não há velas suficientes para calcular previsões para ${symbol}.`);
-    return; // Verificar se há velas suficientes
-  }
-
-  const prices = candles.map(candle => candle.close);
-  console.log(`Preços extraídos para ${symbol}:`, prices);
-
-  // Calcular indicadores
-  const emaShort = calculateEMA(prices, 9);
-  const emaLong = calculateEMA(prices, 21);
-  const macdResult = calculateMACD(prices);
-  const macd = macdResult.macd;
-  const signalLine = macdResult.signalLine;
-
-  console.log(`EMA Curto para ${symbol}:`, emaShort);
-  console.log(`EMA Longo para ${symbol}:`, emaLong);
-  console.log(`MACD para ${symbol}:`, macd);
-  console.log(`MACD Signal para ${symbol}:`, signalLine);
-
+  const emaShort = calculateEMA(prices, 12);
+  const emaLong = calculateEMA(prices, 26);
   const rsi = calculateRSI(prices, 14);
   const bollingerBands = calculateBollingerBands(prices);
   const stochastic = calculateStochastic(prices, 14);
 
-  console.log(`RSI para ${symbol}:`, rsi);
-  console.log(`Bandas de Bollinger para ${symbol}:`, bollingerBands);
-  console.log(`Estocástico para ${symbol}:`, stochastic);
+  const macd = emaShort
+    .slice(-emaLong.length)
+    .map((ema, index) => ema - emaLong[index]);
+  const macdSignal = calculateEMA(macd, 9);
 
-  let predictedDirection = "Neutro";
-  let expirationSuggestion = "1 minuto";
+  const lastPrice = prices[prices.length - 1];
+  let predictedDirection;
   let confidence = 0;
 
-  // Lógica de previsão com múltiplos indicadores
-  if (
-    emaShort.length > 0 &&
-    emaLong.length > 0 &&
-    macd.length > 0 &&
-    signalLine.length > 0
-  ) {
-    const lastEmaShort = emaShort[emaShort.length - 1];
-    const lastEmaLong = emaLong[emaLong.length - 1];
-    const lastMacd = macd[macd.length - 1];
-    const lastSignal = signalLine[signalLine.length - 1];
-
-    // Exemplo de regras de previsão
-    if (lastEmaShort > lastEmaLong && lastMacd > lastSignal) {
-      predictedDirection = "CALL";
-      confidence += 0.5; // Exemplo de aumento de confiança
-    } else if (lastEmaShort < lastEmaLong && lastMacd < lastSignal) {
-      predictedDirection = "PUT";
-      confidence += 0.5; // Exemplo de aumento de confiança
-    }
-
-    // Adicionar lógica adicional para ajustar a confiança com base em outros indicadores
-    if (rsi < 30) {
-      predictedDirection = "CALL";
-      confidence += 0.3;
-    } else if (rsi > 70) {
-      predictedDirection = "PUT";
-      confidence += 0.3;
-    }
-
-    // Avaliar Bandas de Bollinger
-    if (bollingerBands) {
-      const { upperBand, lowerBand } = bollingerBands;
-      const lastPrice = prices[prices.length - 1];
-      if (lastPrice <= lowerBand) {
-        predictedDirection = "CALL";
-        confidence += 0.3;
-      } else if (lastPrice >= upperBand) {
-        predictedDirection = "PUT";
-        confidence += 0.3;
-      }
-    }
-
-    // Avaliar Estocástico
-    if (stochastic) {
-      if (stochastic < 20) {
-        predictedDirection = "CALL";
-        confidence += 0.2;
-      } else if (stochastic > 80) {
-        predictedDirection = "PUT";
-        confidence += 0.2;
-      }
-    }
-
-    // Calcular a precisão das previsões
-    if (data.result !== null) {
-      if (
-        (predictedDirection === "CALL" && data.result === "up") ||
-        (predictedDirection === "PUT" && data.result === "down")
-      ) {
-        data.successfulPredictions++;
-      }
-      data.totalPredictions++;
-    }
-
-    data.lastPredictionTime = Date.now();
-    data.result = predictedDirection;
-    console.log(`Previsão para ${symbol}: ${predictedDirection}, Confiança: ${confidence}`);
+  if (macd[macd.length - 1] > macdSignal[macdSignal.length - 1]) {
+    predictedDirection = "CALL";
+    confidence += 0.3;
   } else {
-    console.log(`Indicadores insuficientes para ${symbol}.`);
+    predictedDirection = "PUT";
+    confidence += 0.3;
+  }
+
+  if (rsi < 30) {
+    predictedDirection = "CALL";
+    confidence += 0.2;
+  } else if (rsi > 70) {
+    predictedDirection = "PUT";
+    confidence += 0.2;
+  }
+
+  if (bollingerBands) {
+    const { upperBand, lowerBand } = bollingerBands;
+    if (lastPrice <= lowerBand) {
+      predictedDirection = "CALL";
+      confidence += 0.2;
+    } else if (lastPrice >= upperBand) {
+      predictedDirection = "PUT";
+      confidence += 0.2;
+    }
+  }
+
+  if (stochastic < 20) {
+    predictedDirection = "CALL";
+    confidence += 0.1;
+  } else if (stochastic > 80) {
+    predictedDirection = "PUT";
+    confidence += 0.1;
+  }
+
+  const patternSignal = detectCandlePattern(data.candles);
+  if (patternSignal) {
+    predictedDirection = patternSignal;
+    confidence += 0.2;
+  }
+
+  let expirationSuggestion = "5 minutos";
+
+  data.totalPredictions++;
+  if (
+    (predictedDirection === "CALL" &&
+      lastPrice > emaShort[emaShort.length - 1]) ||
+    (predictedDirection === "PUT" &&
+      lastPrice < emaShort[emaShort.length - 1])
+  ) {
+    data.successfulPredictions++;
+  }
+
+  const accuracy = (data.successfulPredictions / data.totalPredictions) * 100;
+
+  const lastTickTime = new Date(
+    data.ticks[data.ticks.length - 1].epoch * 1000
+  );
+  const possibleEntryTime = new Date(lastTickTime.getTime() + 30000);
+
+  data.result = {
+    symbol: symbol,
+    currentPrice: lastPrice,
+    lastTickTime: lastTickTime.toLocaleTimeString(),
+    possibleEntryTime: possibleEntryTime.toLocaleTimeString(),
+    predictedDirection: predictedDirection,
+    expirationSuggestion: expirationSuggestion,
+    accuracy: accuracy.toFixed(2),
+    confidence: confidence.toFixed(2)
+  };
+
+  storePrediction(symbol, predictedDirection, confidence);
+
+  console.log('##################');
+  console.log(`Ativo: ${symbol}`);
+  console.log(`Preço Atual: ${lastPrice}`);
+  console.log(`Horário do Último Tick: ${lastTickTime.toLocaleTimeString()}`);
+  console.log(`Horário de Entrada Possível: ${possibleEntryTime.toLocaleTimeString()}`);
+  console.log(`Previsão: ${predictedDirection}`);
+  console.log(`Tempo de Expiração Sugerido: ${expirationSuggestion}`);
+  console.log(`Porcentagem de Acerto: ${accuracy.toFixed(2)}%`);
+  console.log(`Confiança: ${confidence.toFixed(2)}`);
+  console.log('##################');
+
+  data.result = {
+    symbol: symbol,
+    currentPrice: lastPrice,
+    lastTickTime: lastTickTime.toLocaleTimeString(),
+    possibleEntryTime: possibleEntryTime.toLocaleTimeString(),
+    predictedDirection: predictedDirection,
+    expirationSuggestion: expirationSuggestion,
+    accuracy: accuracy.toFixed(2),
+  };
+
+  data.lastPredictionTime = Date.now();
+}
+
+function detectCandlePattern(candles) {
+  // Implementação simplificada de detecção de padrões de velas
+  const lastCandle = candles[candles.length - 1];
+  const secondLastCandle = candles[candles.length - 2];
+
+  if (lastCandle.close > lastCandle.open && secondLastCandle.close < secondLastCandle.open) {
+    return "CALL"; // Exemplo de padrão de reversão
+  } else if (lastCandle.close < lastCandle.open && secondLastCandle.close > secondLastCandle.open) {
+    return "PUT"; // Exemplo de padrão de reversão
+  }
+
+  return null;
+}
+
+function storePrediction(symbol, direction, confidence) {
+  const sql = `INSERT INTO predictions (symbol, predictedDirection, confidence, successful) VALUES (?, ?, ?, NULL)`;
+  db.run(sql, [symbol, direction, confidence], function(err) {
+    if (err) {
+      console.error("Erro ao armazenar previsão:", err.message);
+    } else {
+      console.log(`Previsão armazenada para ${symbol}: ${direction}, Confiança: ${confidence}`);
+
+      setTimeout(() => verifyPredictionOutcome(symbol, this.lastID, direction), 5 * 60 * 1000);
+    }
+  });
+}
+
+function verifyPredictionOutcome(symbol, predictionId, predictedDirection) {
+  const data = symbolData[symbol];
+  const lastPrice = data.ticks[data.ticks.length - 1].quote;
+  const actualDirection = getActualDirection(symbol, lastPrice);
+
+  const successful = (predictedDirection === actualDirection) ? 1 : 0;
+  const sql = `UPDATE predictions SET successful = ? WHERE id = ?`;
+  db.run(sql, [successful, predictionId], (err) => {
+    if (err) {
+      console.error("Erro ao atualizar previsão:", err.message);
+    } else {
+      console.log(`Previsão ${predictionId} atualizada como ${successful ? "WIN" : "LOSS"}.`);
+    }
+  });
+}
+
+function getActualDirection(symbol, lastPrice) {
+  const data = symbolData[symbol];
+  const predictionPrice = data.candles[data.candles.length - 1].close;
+
+  if (lastPrice > predictionPrice) {
+    return "CALL";
+  } else if (lastPrice < predictionPrice) {
+    return "PUT";
+  } else {
+    return "Neutro";
   }
 }
 
-// Iniciar a conexão com o WebSocket
-connectWebSocket();
-
-// Expor a rota para obter dados de previsão
 app.get("/get", (req, res) => {
-  res.json(symbolData);
+  const results = Object.values(symbolData)
+    .map(data => data.result)
+    .filter(result => result !== null);
+  if (results.length > 0) {
+    res.json(results);
+  } else {
+    res.status(404).send("No predictions available");
+  }
 });
 
-// Rota para servir o arquivo HTML
+//connectWebSocket();
+
 app.get("/", (req, res) => {
   res.sendFile(
     path.join(__dirname, "../../client", "indexPredictionsBinaryByCandle.html")
