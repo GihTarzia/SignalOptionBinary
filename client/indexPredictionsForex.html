@@ -110,7 +110,7 @@
             noDataEntry.textContent = "Calculando previsões...";
             logDiv.appendChild(noDataEntry);
           } else {
-            data = data.sort((a, b) => parseFloat(a.confidence) - parseFloat(b.confidence));
+            data = data.sort((a, b) => parseFloat(a.accuracy) - parseFloat(b.accuracy));
             data.forEach((prediction) => {
               const logEntry = document.createElement("div");
               const ativoText = prediction.symbol.replace('frx', '');
@@ -122,9 +122,7 @@
                 Horário de Entrada Possível: ${prediction.possibleEntryTime}
                 Previsão: ${prediction.predictedDirection}
                 Tempo de Expiração Sugerido: ${prediction.expirationSuggestion}
-                    <strong>Porcentagem de Acerto Médio:</strong> ${prediction.overallAccuracy}%
-                <strong>Previsão:</strong> ${prediction.individualAccuracy}
-                <strong>Porcentagem de Acerto:</strong> ${prediction.confidence}%`;
+                <strong>Porcentagem de Acerto:</strong> ${prediction.accuracy}%`;
 
               logEntry.innerHTML = `
                 <strong>Qtde:</strong> ${tempo}
@@ -134,12 +132,10 @@
                 <strong>Horário de Entrada Possível:</strong> ${prediction.possibleEntryTime}
                 <strong>Previsão:</strong> ${prediction.predictedDirection}
                 <strong>Tempo de Expiração Sugerido:</strong> ${prediction.expirationSuggestion}
-                <strong>Porcentagem de Acerto Médio:</strong> ${prediction.overallAccuracy}%
-                <strong>Previsão:</strong> ${prediction.individualAccuracy}
-                <strong>Porcentagem de Acerto:</strong> ${prediction.confidence}%
+                <strong>Porcentagem de Acerto:</strong> ${prediction.accuracy}%
                 ##################<br>`;
 
-              if (parseFloat(prediction.confidence) >= 75) {
+              if (parseFloat(prediction.accuracy) >= 75) {
                 logEntry.classList.add("highlight");
                 if (soundEnabled) {
                   document.getElementById("alertSound").play();

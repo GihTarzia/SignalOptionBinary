@@ -518,32 +518,24 @@ class MarketAnalyzer {
     let direction = "neutral";
     let strength = 0;
 
-    // Ajuste das zonas de sobrevenda/sobrecompra
-    if (current <= 35) {
+    if (current <= 30) {
       direction = "up";
-      strength = Math.min((35 - current) / 15, 1); // Mais sensível
-    } else if (current >= 65) {
+      strength = 1 - current / 30;
+    } else if (current >= 70) {
       direction = "down";
-      strength = Math.min((current - 65) / 15, 1);
+      strength = (current - 70) / 30;
     } else if (current < 45) {
       direction = "up";
-      strength = Math.min((45 - current) / 10, 0.7);
+      strength = (45 - current) / 15;
     } else if (current > 55) {
       direction = "down";
-      strength = Math.min((current - 55) / 10, 0.7);
-    }
-
-    // Considerar tendência do RSI
-    if (rsi.trend === "up" && direction === "up") {
-      strength *= 1.2;
-    } else if (rsi.trend === "down" && direction === "down") {
-      strength *= 1.2;
+      strength = (current - 55) / 15;
     }
 
     return {
       type: "rsi",
       direction,
-      strength: Math.min(strength, 1),
+      strength: Math.min(Math.max(strength, 0), 1),
     };
   }
 
@@ -554,52 +546,34 @@ class MarketAnalyzer {
       strength: 0,
     };
 
-    // Aumentar sensibilidade do MACD
-    const significance = Math.abs(macd.value - macd.signal) * 10000;
-
-    if (macd.histogram > 0) {
+    if (macd.histogram > 0 && macd.value > macd.signal) {
       signal.direction = "up";
-      signal.strength = Math.min(significance, 1);
-    } else if (macd.histogram < 0) {
+      signal.strength = Math.min(Math.abs(macd.histogram) / 0.001, 1);
+    } else if (macd.histogram < 0 && macd.value < macd.signal) {
       signal.direction = "down";
-      signal.strength = Math.min(significance, 1);
-    }
-
-    // Considerar tendência
-    if (macd.trend === signal.direction) {
-      signal.strength *= 1.2;
+      signal.strength = Math.min(Math.abs(macd.histogram) / 0.001, 1);
     }
 
     return signal;
   }
 
   analyzeBollinger(bollinger) {
-    if (
-      !bollinger.percentB &&
-      bollinger.upper &&
-      bollinger.lower &&
-      bollinger.middle
-    ) {
-      // Calcular percentB se não estiver disponível
-      const price = bollinger.price || bollinger.middle;
-      bollinger.percentB =
-        (price - bollinger.lower) / (bollinger.upper - bollinger.lower);
-    }
-
+    const price = bollinger.price || bollinger.middle;
     const signal = {
       type: "bollinger",
       direction: "neutral",
       strength: 0,
     };
 
-    if (bollinger.percentB !== null) {
-      if (bollinger.percentB <= 0.2) {
-        signal.direction = "up";
-        signal.strength = Math.min((0.2 - bollinger.percentB) * 5, 1);
-      } else if (bollinger.percentB >= 0.8) {
-        signal.direction = "down";
-        signal.strength = Math.min((bollinger.percentB - 0.8) * 5, 1);
-      }
+    const bandwidth = bollinger.upper - bollinger.lower;
+    const position = (price - bollinger.lower) / bandwidth;
+
+    if (position <= 0.2) {
+      signal.direction = "up";
+      signal.strength = 1 - position;
+    } else if (position >= 0.8) {
+      signal.direction = "down";
+      signal.strength = position;
     }
 
     return signal;
@@ -612,24 +586,18 @@ class MarketAnalyzer {
       strength: 0,
     };
 
-    // Calcular diferença percentual entre EMAs
-    const diff = (ema.ema20.current - ema.ema50.current) / ema.ema50.current;
-    const significance = Math.abs(diff) * 1000; // Aumentar sensibilidade
-
     if (ema.ema20.current > ema.ema50.current) {
       signal.direction = "up";
-      signal.strength = Math.min(significance, 1);
+      signal.strength = Math.min(
+        ((ema.ema20.current - ema.ema50.current) / ema.ema50.current) * 100,
+        1
+      );
     } else if (ema.ema20.current < ema.ema50.current) {
       signal.direction = "down";
-      signal.strength = Math.min(significance, 1);
-    }
-
-    // Considerar tendências das médias
-    if (
-      ema.ema20.trend === signal.direction &&
-      ema.ema50.trend === signal.direction
-    ) {
-      signal.strength *= 1.2;
+      signal.strength = Math.min(
+        ((ema.ema50.current - ema.ema20.current) / ema.ema50.current) * 100,
+        1
+      );
     }
 
     return signal;
@@ -1714,155 +1682,56 @@ class MarketAnalyzer {
       weights[a] > weights[b[0]] ? a : b[0]
     );
   }
-
-  validateTrendStrength(analysis) {
-    try {
-      // Verificar força mínima da tendência
-      if (
-        !analysis.strength ||
-        analysis.strength < this.config.trendStrengthMin
-      ) {
-        return false;
-      }
-
-      // Verificar alinhamento de diferentes timeframes
-      if (analysis.details?.trends?.alignment) {
-        const alignment = analysis.details.trends.alignment;
-        if (!alignment.isAligned || alignment.strength < 0.7) {
-          return false;
-        }
-      }
-
-      return true;
-    } catch (error) {
-      console.error("Erro na validação da força da tendência:", error);
-      return false;
-    }
-  }
-
-  validateIndicators(indicators) {
-    try {
-      if (!indicators) return false;
-
-      // Validar RSI
-      const rsiValid = this.validateRSI(indicators.rsi);
-
-      // Validar MACD
-      const macdValid = this.validateMACD(indicators.macd);
-
-      // Validar Bollinger Bands
-      const bollingerValid = this.validateBollinger(indicators.bollinger);
-
-      // Exigir que pelo menos 2 dos 3 indicadores confirmem
-      const validCount = [rsiValid, macdValid, bollingerValid].filter(
-        Boolean
-      ).length;
-
-      return validCount >= 2;
-    } catch (error) {
-      console.error("Erro na validação dos indicadores:", error);
-      return false;
-    }
-  }
-
-  validateRSI(rsi) {
-    if (!rsi || !rsi.current) return false;
-
-    // Verificar condições de sobrecompra/sobrevenda
-    if (rsi.current > 70) {
-      return rsi.trend === "down";
-    }
-    if (rsi.current < 30) {
-      return rsi.trend === "up";
-    }
-
-    // Verificar tendência do RSI
-    return Math.abs(rsi.current - 50) > 10;
-  }
-
-  validateMACD(macd) {
-    if (!macd) return false;
-
-    // Verificar cruzamento significativo
-    const significantCrossover = Math.abs(macd.value - macd.signal) > 0.0001;
-
-    // Verificar direção do histograma
-    const positiveHistogram = macd.histogram > 0;
-
-    return significantCrossover && positiveHistogram;
-  }
-
-  validateBollinger(bollinger) {
-    if (!bollinger) return false;
-
-    // Verificar posição do preço em relação às bandas
-    const percentB = bollinger.percentB;
-
-    // Validar sinais de reversão nas bandas
-    if (percentB < 0.05) return true; // Próximo à banda inferior
-    if (percentB > 0.95) return true; // Próximo à banda superior
-
-    return false;
-  }
-
-  validateMarketConditions(details) {
-    try {
-      if (!details || !details.market) return false;
-
-      const { volume, volatility } = details.market.details;
-
-      // Validar volume
-      if (volume < 0.7) {
-        // Volume deve ser pelo menos 70% da média
-        return false;
-      }
-
-      // Validar volatilidade
-      if (volatility > this.config.volatilityThreshold) {
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error("Erro na validação das condições de mercado:", error);
-      return false;
-    }
-  }
-
-  validatePricePatterns(patterns) {
-    try {
-      if (!patterns) return true; // Padrões não são obrigatórios
-
-      // Se houver padrões, verificar a confiabilidade
-      if (patterns.reliability < 0.7) {
-        return false;
-      }
-
-      // Verificar força do padrão
-      if (patterns.strength < 0.7) {
-        return false;
-      }
-
-      return true;
-    } catch (error) {
-      console.error("Erro na validação dos padrões de preço:", error);
-      return true; // Em caso de erro, não bloquear por padrões
-    }
-  }
-
   validateAnalysis(analysis) {
     try {
+      // Verificar se a análise existe
       if (!analysis || typeof analysis !== "object") {
+        console.log("Análise inválida ou ausente");
         return false;
       }
 
-      // Reduzir threshold de confiança
-      if (!analysis.confidence || analysis.confidence < 0.6) {
+      // Validar confiança mínima
+      if (
+        !analysis.confidence ||
+        analysis.confidence < this.config.minConfidence
+      ) {
+        console.log(`Confiança insuficiente: ${analysis.confidence}`);
         return false;
       }
 
-      // Reduzir threshold de força
-      if (!analysis.strength || analysis.strength < 0.01) {
+      // Validar direção
+      if (!analysis.direction || analysis.direction === "neutral") {
+        console.log("Direção indefinida ou neutra");
+        return false;
+      }
+
+      // Validar força da tendência
+      if (!this.validateTrendStrength(analysis)) {
+        console.log("Força da tendência insuficiente");
+        return false;
+      }
+
+      // Validar indicadores técnicos
+      if (!this.validateIndicators(analysis.details?.indicators)) {
+        console.log("Indicadores técnicos não confirmam");
+        return false;
+      }
+
+      // Validar condições de mercado
+      if (!this.validateMarketConditions(analysis.details)) {
+        console.log("Condições de mercado desfavoráveis");
+        return false;
+      }
+
+      // Validar padrões de preço
+      if (!this.validatePricePatterns(analysis.details?.patterns)) {
+        console.log("Padrões de preço não confirmam");
+        return false;
+      }
+
+      // Validar momentum
+      if (!this.validateMomentum(analysis.details?.momentum)) {
+        console.log("Momentum insuficiente");
         return false;
       }
 
@@ -1872,15 +1741,220 @@ class MarketAnalyzer {
       return false;
     }
   }
-  normalizeSignalStrength(strength, type) {
-    const multipliers = {
-      rsi: 1.2,
-      macd: 1000,
-      bollinger: 1.5,
-      ema: 100,
-    };
 
-    return Math.min(strength * (multipliers[type] || 1), 1);
+  validateTrendStrength(analysis) {
+    try {
+      // Verificar força mínima da tendência
+      if (
+        !analysis.strength ||
+        analysis.strength < this.config.trendStrengthMin
+      ) {
+        return false;
+      }
+
+      // Verificar alinhamento de diferentes timeframes
+      if (analysis.details?.trends?.alignment) {
+        const alignment = analysis.details.trends.alignment;
+        if (!alignment.isAligned || alignment.strength < 0.7) {
+          return false;
+        }
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Erro na validação da força da tendência:", error);
+      return false;
+    }
+  }
+
+  validateIndicators(indicators) {
+    try {
+      if (!indicators) return false;
+
+      // Validar RSI
+      const rsiValid = this.validateRSI(indicators.rsi);
+
+      // Validar MACD
+      const macdValid = this.validateMACD(indicators.macd);
+
+      // Validar Bollinger Bands
+      const bollingerValid = this.validateBollinger(indicators.bollinger);
+
+      // Exigir que pelo menos 2 dos 3 indicadores confirmem
+      const validCount = [rsiValid, macdValid, bollingerValid].filter(
+        Boolean
+      ).length;
+
+      return validCount >= 2;
+    } catch (error) {
+      console.error("Erro na validação dos indicadores:", error);
+      return false;
+    }
+  }
+
+  validateRSI(rsi) {
+    if (!rsi || !rsi.current) return false;
+
+    // Verificar condições de sobrecompra/sobrevenda
+    if (rsi.current > 70) {
+      return rsi.trend === "down";
+    }
+    if (rsi.current < 30) {
+      return rsi.trend === "up";
+    }
+
+    // Verificar tendência do RSI
+    return Math.abs(rsi.current - 50) > 10;
+  }
+
+  validateMACD(macd) {
+    if (!macd) return false;
+
+    // Verificar cruzamento significativo
+    const significantCrossover = Math.abs(macd.value - macd.signal) > 0.0001;
+
+    // Verificar direção do histograma
+    const positiveHistogram = macd.histogram > 0;
+
+    return significantCrossover && positiveHistogram;
+  }
+
+  validateBollinger(bollinger) {
+    if (!bollinger) return false;
+
+    // Verificar posição do preço em relação às bandas
+    const percentB = bollinger.percentB;
+
+    // Validar sinais de reversão nas bandas
+    if (percentB < 0.05) return true; // Próximo à banda inferior
+    if (percentB > 0.95) return true; // Próximo à banda superior
+
+    return false;
+  }
+
+  validateMarketConditions(details) {
+    try {
+      if (!details || !details.market) return false;
+
+      const { volume, volatility } = details.market.details;
+
+      // Validar volume
+      if (volume < 0.7) {
+        // Volume deve ser pelo menos 70% da média
+        return false;
+      }
+
+      // Validar volatilidade
+      if (volatility > this.config.volatilityThreshold) {
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Erro na validação das condições de mercado:", error);
+      return false;
+    }
+  }
+
+  validatePricePatterns(patterns) {
+    try {
+      if (!patterns) return true; // Padrões não são obrigatórios
+
+      // Se houver padrões, verificar a confiabilidade
+      if (patterns.reliability < 0.7) {
+        return false;
+      }
+
+      // Verificar força do padrão
+      if (patterns.strength < 0.7) {
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Erro na validação dos padrões de preço:", error);
+      return true; // Em caso de erro, não bloquear por padrões
+    }
+  }
+
+  validateMomentum(momentum) {
+    try {
+      if (!momentum) return false;
+
+      // Verificar força do momentum
+      if (momentum.strength < 0.6) {
+        return false;
+      }
+
+      // Verificar alinhamento com a direção da tendência
+      if (momentum.direction === "neutral") {
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Erro na validação do momentum:", error);
+      return false;
+    }
+  }
+  validateAnalysis(analysis) {
+    try {
+      // Verificar se a análise existe
+      if (!analysis || typeof analysis !== "object") {
+        console.log("Análise inválida ou ausente");
+        return false;
+      }
+
+      // Validar confiança mínima
+      if (
+        !analysis.confidence ||
+        analysis.confidence < this.config.minConfidence
+      ) {
+        console.log(`Confiança insuficiente: ${analysis.confidence}`);
+        return false;
+      }
+
+      // Validar direção
+      if (!analysis.direction || analysis.direction === "neutral") {
+        console.log("Direção indefinida ou neutra");
+        return false;
+      }
+
+      // Validar força da tendência
+      if (!this.validateTrendStrength(analysis)) {
+        console.log("Força da tendência insuficiente");
+        return false;
+      }
+
+      // Validar indicadores técnicos
+      if (!this.validateIndicators(analysis.details?.indicators)) {
+        console.log("Indicadores técnicos não confirmam");
+        return false;
+      }
+
+      // Validar condições de mercado
+      if (!this.validateMarketConditions(analysis.details)) {
+        console.log("Condições de mercado desfavoráveis");
+        return false;
+      }
+
+      // Validar padrões de preço
+      if (!this.validatePricePatterns(analysis.details?.patterns)) {
+        console.log("Padrões de preço não confirmam");
+        return false;
+      }
+
+      // Validar momentum
+      if (!this.validateMomentum(analysis.details?.momentum)) {
+        console.log("Momentum insuficiente");
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Erro na validação da análise:", error);
+      return false;
+    }
   }
 
   validateTrendStrength(analysis) {
@@ -2018,6 +2092,86 @@ class MarketAnalyzer {
     }
   }
 
+  validateMomentum(momentum) {
+    try {
+      if (!momentum) return false;
+
+      // Verificar força do momentum
+      if (momentum.strength < 0.6) {
+        return false;
+      }
+
+      // Verificar alinhamento com a direção da tendência
+      if (momentum.direction === "neutral") {
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Erro na validação do momentum:", error);
+      return false;
+    }
+  }
+  validateAnalysis(analysis) {
+    try {
+      // Verificar se a análise existe
+      if (!analysis || typeof analysis !== "object") {
+        console.log("Análise inválida ou ausente");
+        return false;
+      }
+
+      // Validar confiança mínima
+      if (
+        !analysis.confidence ||
+        analysis.confidence < this.config.minConfidence
+      ) {
+        console.log(`Confiança insuficiente: ${analysis.confidence}`);
+        return false;
+      }
+
+      // Validar direção
+      if (!analysis.direction || analysis.direction === "neutral") {
+        console.log("Direção indefinida ou neutra");
+        return false;
+      }
+
+      // Validar força da tendência
+      if (!this.validateTrendStrength(analysis)) {
+        console.log("Força da tendência insuficiente");
+        return false;
+      }
+
+      // Validar indicadores técnicos
+      if (!this.validateIndicators(analysis.details?.indicators)) {
+        console.log("Indicadores técnicos não confirmam");
+        return false;
+      }
+
+      // Validar condições de mercado
+      if (!this.validateMarketConditions(analysis.details)) {
+        console.log("Condições de mercado desfavoráveis");
+        return false;
+      }
+
+      // Validar padrões de preço
+      if (!this.validatePricePatterns(analysis.details?.patterns)) {
+        console.log("Padrões de preço não confirmam");
+        return false;
+      }
+
+      // Validar momentum
+      if (!this.validateMomentum(analysis.details?.momentum)) {
+        console.log("Momentum insuficiente");
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Erro na validação da análise:", error);
+      return false;
+    }
+  }
+
   validateTrendStrength(analysis) {
     try {
       // Verificar força mínima da tendência
@@ -2153,83 +2307,114 @@ class MarketAnalyzer {
     }
   }
 
-  determineDirectionFromSignals(signals) {
-    if (!signals || signals.length === 0) return "neutral";
+  validateMomentum(momentum) {
+    try {
+      if (!momentum) return false;
 
-    const validSignals = signals.filter(
-      (signal) => signal && typeof signal === "object" && signal.direction
-    );
-
-    const directions = {
-      up: 0,
-      down: 0,
-      neutral: 0,
-    };
-
-    const weights = {
-      rsi: 0.25,
-      macd: 0.3,
-      bollinger: 0.25,
-      ema: 0.2,
-    };
-
-    validSignals.forEach((signal, index) => {
-      const weight = weights[signal.type] || 0.25;
-      directions[signal.direction] += weight * (signal.strength || 1);
-    });
-
-    return this.getStrongestDirection(directions);
-  }
-  getStrongestDirection(directions) {
-    const totalWeight = Object.values(directions).reduce((a, b) => a + b, 0);
-    if (totalWeight === 0) return "neutral";
-
-    const threshold = 0.6;
-    for (const [direction, weight] of Object.entries(directions)) {
-      if (weight / totalWeight > threshold) {
-        return direction;
+      // Verificar força do momentum
+      if (momentum.strength < 0.6) {
+        return false;
       }
-    }
 
-    return "neutral";
+      // Verificar alinhamento com a direção da tendência
+      if (momentum.direction === "neutral") {
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error("Erro na validação do momentum:", error);
+      return false;
+    }
   }
 
   determineOverallDirection(signals) {
     try {
-      // Para sinais dos indicadores
-      if (Array.isArray(signals)) {
-        return this.determineDirectionFromSignals(signals);
+      // Validar entrada
+      if (!signals || !Array.isArray(signals)) {
+        console.warn("Sinais inválidos recebidos em determineOverallDirection");
+        return "neutral";
       }
 
-      // Para objeto de direções
-      if (signals && typeof signals === "object") {
-        return this.determineDirectionFromTrends(signals);
+      // Filtrar sinais válidos
+      const validSignals = signals.filter(
+        (signal) => signal && typeof signal === "object" && signal.direction
+      );
+
+      if (validSignals.length === 0) {
+        console.log("Nenhum sinal válido encontrado");
+        return "neutral";
       }
 
+      // Contagem de direções com pesos
+      const directions = {
+        up: 0,
+        down: 0,
+        neutral: 0,
+      };
+
+      // Pesos para cada tipo de sinal
+      const weights = {
+        rsi: 0.25,
+        macd: 0.3,
+        bollinger: 0.25,
+        ema: 0.2,
+      };
+
+      // Processar cada sinal válido
+      validSignals.forEach((signal, index) => {
+        try {
+          let weight = 0.25; // peso padrão
+
+          // Determinar peso baseado no índice
+          switch (index) {
+            case 0:
+              weight = weights.rsi;
+              break;
+            case 1:
+              weight = weights.macd;
+              break;
+            case 2:
+              weight = weights.bollinger;
+              break;
+            case 3:
+              weight = weights.ema;
+              break;
+          }
+
+          // Adicionar peso à direção correspondente
+          if (signal.direction in directions) {
+            directions[signal.direction] += weight * (signal.strength || 1);
+          }
+        } catch (err) {
+          console.error("Erro ao processar sinal individual:", err);
+        }
+      });
+
+      // Calcular direção dominante
+      const totalWeight = Object.values(directions).reduce((a, b) => a + b, 0);
+
+      if (totalWeight === 0) {
+        console.log("Nenhum peso total encontrado");
+        return "neutral";
+      }
+
+      // Verificar se há direção dominante clara
+      const threshold = 0.6; // 60% dos sinais precisam concordar
+
+      for (const [direction, weight] of Object.entries(directions)) {
+        if (weight / totalWeight > threshold) {
+          console.log(`Direção dominante encontrada: ${direction}`);
+          return direction;
+        }
+      }
+
+      console.log("Sem direção dominante clara");
       return "neutral";
     } catch (error) {
       console.error("Erro ao determinar direção geral:", error);
       return "neutral";
     }
-  }
-  determineDirectionFromTrends(trends) {
-    const { indicators, trend } = trends;
-
-    if (!indicators || !trend) return "neutral";
-
-    const directions = {
-      up: 0,
-      down: 0,
-      neutral: 0,
-    };
-
-    // Peso dos indicadores
-    if (indicators) directions[indicators] += 0.6;
-
-    // Peso da tendência
-    if (trend) directions[trend] += 0.4;
-
-    return this.getStrongestDirection(directions);
   }
   calculatePatternStrength(patterns) {
     try {

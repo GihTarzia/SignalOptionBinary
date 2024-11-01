@@ -55,15 +55,26 @@ class NotificationService {
   }
 
   validateSignal(signal) {
+    // Verificar se todos os campos necessários existem
+    if (!signal.symbol || !signal.direction || !signal.confidence) {
+      return false;
+    }
 
-    if (signal.strength < 0.1) return false; // Força mínima mais alta
-    
-    // Exigir confirmação de pelo menos dois indicadores
-    const confirmingSignals = Object.values(signal.signals)
-      .filter(s => s && s.direction === signal.direction);
-    
-    return confirmingSignals.length >= 2;
-    
+    // Verificar duplicatas recentes
+    const lastSignal = this.lastSignals.get(signal.symbol);
+    if (lastSignal) {
+      const timeDiff = Date.now() - lastSignal.timestamp;
+      if (timeDiff < this.signalInterval) {
+        return false;
+      }
+    }
+
+    // Validar confiança mínima (95%)
+    if (signal.confidence < 0.95) {
+      return false;
+    }
+
+    return true;
   }
 
   formatSignalMessage(signal) {

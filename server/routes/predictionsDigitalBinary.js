@@ -354,8 +354,6 @@ class PredictionsManager {
 
     res.json(performance);
   }
-
-  
 }
 
 const predictionsManager = new PredictionsManager();

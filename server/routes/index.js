@@ -6,8 +6,8 @@ const router = express.Router();
 
 // Usando as rotas de sinais e precisão
 router.use("/previsaoForex", predictionsRoutes);
-router.use("/previsaoDigitalBinary", predictionsDigitalBinary);
-router.use("/previsaoBinaryByCandle", predictionsBinaryByCandle);
+//router.use("/previsaoDigitalBinary", predictionsDigitalBinary);
+//router.use("/previsaoBinaryByCandle", predictionsBinaryByCandle);
 
 
 module.exports = router;
