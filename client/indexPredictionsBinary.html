@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Previsões de Forex/Digital/Binário</title>
+    <title>Previsões de Binário</title>
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -244,7 +244,7 @@
     </style>
   </head>
   <body>
-    <h1>Previsões de Forex/Digital/Binário</h1>
+    <h1>Previsões de Binário</h1>
 
     <div class="controls">
       <button id="enableSound">Ativar Som</button>
@@ -317,10 +317,11 @@
 
       // Detectar quando o sistema fica offline/online
       function checkConnection() {
-        fetch("/previsaoForex/ping")
-          .then(() => {
-            isOffline = false;
-            document.body.classList.remove("offline");
+        fetch("/previsaoBinary/status")
+          .then((response) => response.json())
+          .then((status) => {
+            isOffline = !status.connected;
+            document.body.classList.toggle("offline", isOffline);
           })
           .catch(() => {
             isOffline = true;
@@ -366,16 +367,18 @@
 
       function formatIndicators(indicators) {
         return `
-          <div class="indicators">
-              <strong>Indicadores Técnicos:</strong>
-              <ul>
-                  <li>MACD: ${indicators.macd.toFixed(5)}</li>
-                  <li>RSI: ${indicators.rsi.toFixed(2)}</li>
-                  <li>Tendência: ${indicators.trend} (${
+                  <div class="indicators">
+            <strong>Indicadores Técnicos:</strong>
+            <ul>
+                <li>RSI: ${indicators.rsi.toFixed(2)}</li>
+                <li>Bollinger Bands: Upper ${indicators.bb.upper.toFixed(
+                  5
+                )} / Lower ${indicators.bb.lower.toFixed(5)}</li>
+                <li>Tendência: ${indicators.trend} (${
           indicators.isTrendStrong ? "Forte" : "Fraca"
         })</li>
-              </ul>
-          </div>
+            </ul>
+        </div>
       `;
       }
 
@@ -385,114 +388,93 @@
           document.getElementById("minAccuracy").value
         );
 
-        fetch("/previsaoForex/get")
+        fetch("/previsaoBinary/predictions")
           .then((response) => response.json())
           .then((data) => {
             const logDiv = document.getElementById("log");
+            logDiv.innerHTML = ""; // Limpar entradas anteriores
 
             if (data.length === 0) {
               const noDataEntry = document.createElement("div");
-              noDataEntry.textContent = "Calculando previsões...";
+              noDataEntry.textContent = "Aguardando sinais...";
               logDiv.appendChild(noDataEntry);
             } else {
-              data = data
-                .filter(
-                  (p) =>
-                    p.signalScore >= minScore &&
-                    parseFloat(p.accuracy) >= minAccuracy
-                )
-                .sort(
-                  (a, b) => parseFloat(b.accuracy) - parseFloat(a.accuracy)
-                );
-
               data.forEach((prediction) => {
                 const logEntry = document.createElement("div");
-                const ativoText = prediction.symbol.replace("frx", "");
 
                 const blockText = `
-          <div class="prediction-block">
-              <div class="prediction-header">
-                  <strong>Ativo:</strong> ${ativoText}
-                  <button class="copy-button" onclick="copyAsset('${ativoText}', this.parentElement)">
-                      Copiar Ativo
-                  </button>
-              </div>
-              <div class="prediction-details">
-                  <p><strong>Preço Atual:</strong> ${
-                    prediction.currentPrice
-                  }</p>
-                  <p><strong>Horário do Último Tick:</strong> ${
-                    prediction.lastTickTime
-                  }</p>
-                  <p><strong>Horário de Entrada Possível:</strong> ${
-                    prediction.possibleEntryTime
-                  }</p>
-                  <p><strong>Previsão:</strong> ${
-                    prediction.predictedDirection
-                  }</p>
-                  <p><strong>Tempo de Expiração:</strong> ${
-                    prediction.expirationSuggestion
-                  }</p>
-                  <p><strong>Score do Sinal:</strong> ${
-                    prediction.signalScore
-                  }</p>
-                  <p><strong>Precisão:</strong> ${prediction.accuracy}%</p>
-              </div>
-              ${formatIndicators(prediction.indicators)}
-          </div>
-      `;
+                        <div class="prediction-block">
+                            <div class="prediction-header">
+                                <strong>Ativo:</strong> ${prediction.symbol}
+                                <button class="copy-button" onclick="copyAsset('${
+                                  prediction.symbol
+                                }', this.parentElement)">
+                                    Copiar Ativo
+                                </button>
+                            </div>
+                            <div class="prediction-details">
+                                <p><strong>Preço Atual:</strong> ${
+                                  prediction.currentPrice
+                                }</p>
+                                <p><strong>Direção:</strong> ${
+                                  prediction.predictedDirection
+                                }</p>
+                                <p><strong>Tempo de Expiração:</strong> ${
+                                  prediction.expirationTime
+                                }</p>
+                                <p><strong>Score do Sinal:</strong> ${
+                                  prediction.signalScore
+                                }</p>
+                            </div>
+                            ${formatIndicators(prediction.indicators)}
+                        </div>
+                    `;
+
                 logEntry.innerHTML = blockText;
+
                 if (prediction.signalScore >= 3) {
                   logEntry.classList.add("strong-signal");
-                } else if (parseFloat(prediction.accuracy) >= 75) {
-                  logEntry.classList.add("highlight");
                 }
 
-                if (
-                  (prediction.signalScore >= 3 ||
-                    parseFloat(prediction.accuracy) >= 75) &&
-                  soundEnabled
-                ) {
+                if (prediction.signalScore >= 3 && soundEnabled) {
                   document.getElementById("alertSound").play();
                   setTimeout(myStopFunction, 2000);
                 }
 
                 logDiv.appendChild(logEntry);
               });
-
-              document.getElementById("LogDiv").scrollTop =
-                document.getElementById("LogDiv").scrollHeight;
             }
           })
-          .catch((error) => console.error("Erro ao buscar previsões:", error));
+          .catch((error) => {
+            console.error("Erro ao buscar previsões:", error);
+            document.body.classList.add("offline");
+          });
       }
 
       function fetchStatistics() {
-        fetch("/previsaoForex/statistics")
+        fetch("/previsaoBinary/statistics")
           .then((response) => response.json())
           .then((data) => {
             const statsContent = document.getElementById("statsContent");
             statsContent.innerHTML = `
-                  <div class="stats-grid">
-                      ${data
-                        .map(
-                          (stat) => `
-                          <div class="stat-item">
-                              <h3>${stat.symbol.replace("frx", "")}</h3>
-                              <div class="stat-details">
-                                  <p>Total de Previsões: ${
-                                    stat.total_predictions
-                                  }</p>
-                                  <p>Score Médio: ${stat.avg_score.toFixed(
-                                    2
-                                  )}</p>
-                              </div>
-                          </div>
-                      `
-                        )
-                        .join("")}
-                  </div>
-              `;
+                <div class="stats-grid">
+                    ${data
+                      .map(
+                        (stat) => `
+                        <div class="stat-item">
+                            <h3>${stat.symbol}</h3>
+                            <div class="stat-details">
+                                <p>Total de Previsões: ${
+                                  stat.total_predictions
+                                }</p>
+                                <p>Score Médio: ${stat.avg_score.toFixed(2)}</p>
+                            </div>
+                        </div>
+                    `
+                      )
+                      .join("")}
+                </div>
+            `;
           })
           .catch((error) =>
             console.error("Erro ao buscar estatísticas:", error)
@@ -547,7 +529,7 @@
       };
 
       // Inicialização
-      setInterval(fetchPredictions, 50000);
+      setInterval(fetchPredictions, 10000); // 10 segundos
       fetchPredictions();
 
       // Atualizar quando os filtros mudarem

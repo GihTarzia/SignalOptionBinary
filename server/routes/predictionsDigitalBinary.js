@@ -356,7 +356,7 @@ class PredictionsManager {
   }
 }
 
-const predictionsManager = new PredictionsManager();
-predictionsManager.initialize();
+//const predictionsManager = new PredictionsManager();
+//predictionsManager.initialize();
 
-module.exports = predictionsManager.app;
+//module.exports = predictionsManager.app;
